@@ -1,84 +1,121 @@
 
+import { supabase } from './supabase';
 import type { User } from '../types';
 
-// Simulação de banco de dados local
-const MOCK_USERS: User[] = [
-  {
-    id: 'admin-01',
-    name: 'Super Admin',
-    email: 'admin@newsai.com',
-    role: 'admin',
-    plan: 'Enterprise',
-    credits: 9999
-  },
-  {
-    id: 'user-01',
-    name: 'Usuário Demo',
-    email: 'demo@user.com',
-    role: 'user',
-    plan: 'Gratuito',
-    credits: 0 // Simulando sem créditos para teste
-  }
-];
-
 export const authService = {
-  login: async (email: string, password: string, type: 'user' | 'admin'): Promise<User> => {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        // Simulação simples: qualquer senha > 3 chars funciona para fins de demo
-        // Em produção, validar hash de senha real via Supabase
-        if (password.length < 3) {
-            reject(new Error('Senha inválida'));
-            return;
-        }
-
-        const foundUser = MOCK_USERS.find(u => u.email === email);
-        
-        if (foundUser) {
-            // Verifica se o usuário tentou logar na área certa
-            if (type === 'admin' && foundUser.role !== 'admin') {
-                reject(new Error('Acesso negado: Este usuário não é administrador.'));
-                return;
-            }
-            resolve(foundUser);
-        } else {
-            // Se não achou mock, cria um usuário fake na hora para permitir teste
-            if (type === 'admin') {
-                 reject(new Error('Admin não encontrado. Use admin@newsai.com'));
-                 return;
-            }
-            // Login "fake" para novos emails
-            const newUser: User = {
-                id: `user-${Date.now()}`,
-                name: email.split('@')[0],
-                email,
-                role: 'user',
-                plan: 'Gratuito',
-                credits: 3 // Novos usuários ganham 3 créditos
-            };
-            resolve(newUser);
-        }
-      }, 1000);
+  login: async (email: string, password: string): Promise<User> => {
+    // 1. Autenticação no Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
     });
+
+    if (authError) throw new Error(authError.message);
+    if (!authData.user) throw new Error('Usuário não encontrado.');
+
+    // 2. Buscar dados complementares na tabela 'usuarios'
+    const { data: profileData, error: profileError } = await supabase
+      .from('usuarios')
+      .select('*')
+      .eq('id', authData.user.id)
+      .single();
+
+    if (profileError) {
+        console.error("Erro ao buscar perfil na tabela 'usuarios':", profileError);
+        // Se o erro for de conexão ou tabela inexistente, lançamos. 
+        // Se for apenas registro não encontrado (PGRST116), podemos tentar prosseguir ou barrar.
+        // Para integridade, é melhor barrar ou criar um perfil default.
+        if (profileError.code !== 'PGRST116') {
+           // throw new Error('Erro de sistema: Não foi possível carregar seu perfil.');
+        }
+    }
+
+    // Normalização de Role: Aceita 'super_admin' ou 'admin' no banco como admin na app
+    const dbRole = profileData?.role || 'user';
+    const appRole = (dbRole === 'super_admin' || dbRole === 'admin') ? 'admin' : 'user';
+
+    const user: User = {
+      id: authData.user.id,
+      email: authData.user.email!,
+      name: profileData?.name || authData.user.user_metadata?.name || email.split('@')[0],
+      role: appRole as 'user' | 'admin',
+      plan: profileData?.plan || 'Gratuito',
+      credits: profileData?.creditos_saldo ?? 0, 
+      status: 'Active'
+    };
+
+    return user;
   },
 
   register: async (name: string, email: string, password: string): Promise<User> => {
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            const newUser: User = {
-                id: `user-${Date.now()}`,
-                name,
-                email,
-                role: 'user',
-                plan: 'Gratuito',
-                credits: 3
-            };
-            resolve(newUser);
-        }, 1500);
+    // 1. Criar usuário no Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name }
+      }
     });
+
+    if (authError) throw new Error(authError.message);
+    if (!authData.user) throw new Error('Falha ao criar usuário no sistema de autenticação.');
+
+    // 2. Inserir na tabela pública 'usuarios'
+    const { error: insertError } = await supabase
+        .from('usuarios')
+        .insert([{
+            id: authData.user.id,
+            email: email,
+            name: name,
+            role: 'standard',
+            creditos_saldo: 3,
+            plan: 'Gratuito'
+        }]);
+
+    if (insertError) {
+        console.warn("Aviso: Falha ao criar registro na tabela pública 'usuarios'. Verifique triggers ou permissões.", insertError.message);
+    }
+
+    const newUser: User = {
+      id: authData.user.id,
+      name,
+      email,
+      role: 'user',
+      plan: 'Gratuito',
+      credits: 3,
+      status: 'Active'
+    };
+
+    return newUser;
   },
 
   logout: async (): Promise<void> => {
-      return new Promise(resolve => setTimeout(resolve, 500));
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  },
+
+  getCurrentSession: async (): Promise<User | null> => {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    
+    if (error || !session?.user) return null;
+
+    const { data: profileData } = await supabase
+      .from('usuarios')
+      .select('*')
+      .eq('id', session.user.id)
+      .single();
+
+    const dbRole = profileData?.role || 'user';
+    const appRole = (dbRole === 'super_admin' || dbRole === 'admin') ? 'admin' : 'user';
+
+    return {
+      id: session.user.id,
+      email: session.user.email!,
+      name: profileData?.name || session.user.user_metadata?.name || 'Usuário',
+      role: appRole as 'user' | 'admin',
+      plan: profileData?.plan || 'Gratuito',
+      credits: profileData?.creditos_saldo ?? 0,
+      status: 'Active'
+    };
   }
 };
