@@ -7,8 +7,11 @@ import CheckoutModal from './components/CheckoutModal';
 import Documentation from './components/Documentation';
 import UserDashboard from './components/UserDashboard';
 import AdminDashboard from './components/AdminDashboard';
+import Login from './components/Login';
+import Register from './components/Register';
 import { generateNewsArticle } from './services/geminiService';
-import type { GeneratedNews, PlanConfig, AppConfig } from './types';
+import { authService } from './services/authService';
+import type { GeneratedNews, PlanConfig, AppConfig, User } from './types';
 import { NEWS_THEMES, NEWS_TONES } from './constants';
 
 // --- CONSTANTS ---
@@ -497,8 +500,11 @@ const HistorySidebar: React.FC<{
     );
 };
 
+type ViewState = 'app' | 'docs' | 'user-dashboard' | 'admin-dashboard' | 'admin-docs' | 'login' | 'register';
+
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<'app' | 'docs' | 'user-dashboard' | 'admin-dashboard' | 'admin-docs'>('app');
+  const [currentView, setCurrentView] = useState<ViewState>('app');
+  const [user, setUser] = useState<User | null>(null);
 
   const [theme, setTheme] = useState<string>(NEWS_THEMES[0]);
   const [topic, setTopic] = useState<string>('');
@@ -519,7 +525,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
       localStorage.setItem('news_app_config', JSON.stringify(appConfig));
-      // Update document title dynamically
       document.title = appConfig.appName;
   }, [appConfig]);
 
@@ -551,9 +556,8 @@ const App: React.FC = () => {
     }
     return storedCredits ? parseInt(storedCredits) : 3;
   }); 
-  const [showUpgradeModal, setShowUpgradeModal] = useState<boolean>(false);
   
-  // Checkout Logic States
+  const [showUpgradeModal, setShowUpgradeModal] = useState<boolean>(false);
   const [showCheckoutModal, setShowCheckoutModal] = useState<boolean>(false);
   const [checkoutPlan, setCheckoutPlan] = useState<PlanConfig | null>(null);
 
@@ -561,13 +565,19 @@ const App: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'a' || e.key === 'A')) {
         e.preventDefault();
-        setCurrentView(prev => prev === 'admin-dashboard' ? 'app' : 'admin-dashboard');
+        // If user is admin, toggle admin dashboard
+        if (user?.role === 'admin') {
+            setCurrentView(prev => prev === 'admin-dashboard' ? 'app' : 'admin-dashboard');
+        } else {
+            // Shortcut to login
+            if (!user) setCurrentView('login');
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const today = new Date().toLocaleDateString();
@@ -580,11 +590,23 @@ const App: React.FC = () => {
     }
   }, [credits, history]); 
 
+  // Sync credits from User Object when login happens
+  useEffect(() => {
+      if (user) {
+          setCredits(user.credits);
+      }
+  }, [user]);
+
   const handleGenerateNews = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (credits <= 0) {
-      setShowUpgradeModal(true);
+      // Force user to login if not logged in
+      if (!user) {
+          setCurrentView('login');
+      } else {
+          setShowUpgradeModal(true);
+      }
       return;
     }
 
@@ -604,6 +626,11 @@ const App: React.FC = () => {
       const newCredits = credits - 1;
       setCredits(newCredits);
       
+      // Sync back to user object mock
+      if (user) {
+          setUser({...user, credits: newCredits});
+      }
+      
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
@@ -616,11 +643,7 @@ const App: React.FC = () => {
   };
 
   const handleUpgrade = (planId: string) => {
-    // Enterprise directs to WhatsApp
-    if (planId === 'p_enterprise') {
-        // This is handled inside UpgradeModal now, but keep fail-safe here or remove
-        return;
-    }
+    if (planId === 'p_enterprise') return;
 
     let selectedPlan: PlanConfig | undefined;
     
@@ -646,25 +669,67 @@ const App: React.FC = () => {
   };
 
   const handlePaymentSuccess = () => {
+      let addedCredits = 0;
       if (checkoutPlan) {
           if (checkoutPlan.id === 'single') {
-              setCredits(prev => prev + 1);
+              addedCredits = 1;
           } else {
-              setCredits(prev => prev + checkoutPlan.credits);
+              addedCredits = checkoutPlan.credits;
           }
       }
+      
+      const newTotal = credits + addedCredits;
+      setCredits(newTotal);
+      
+      if (user) {
+          setUser({...user, credits: newTotal});
+      }
+
       setShowCheckoutModal(false);
       setCheckoutPlan(null);
   };
 
-  // Direct WhatsApp Action
-  const handleOpenContact = () => {
-      const waNumber = appConfig.whatsappNumber.replace(/\D/g, '');
-      // Use configured message or default
-      const msg = appConfig.contactMessage || `Olá, estou entrando em contato através do app ${appConfig.appName}.`;
-      const text = encodeURIComponent(msg);
-      window.open(`https://wa.me/${waNumber}?text=${text}`, '_blank');
+  // Auth Handlers
+  const handleLoginSuccess = (userData: User) => {
+      setUser(userData);
+      // Auto-redirect for admins
+      if (userData.role === 'admin') {
+          setCurrentView('admin-dashboard');
+      } else {
+          setCurrentView('app');
+      }
   };
+
+  const handleLogout = async () => {
+      await authService.logout();
+      setUser(null);
+      // Reset credits to default daily limit for "guest" on logout, or keep as is
+      setCredits(3); 
+      setCurrentView('login');
+  };
+
+  const handleOpenProAction = () => {
+      if (!user) {
+          setCurrentView('login');
+      } else {
+          setShowUpgradeModal(true);
+      }
+  };
+
+  // Views
+  if (currentView === 'login') {
+      return (
+        <Login 
+            onLoginSuccess={handleLoginSuccess} 
+            onGoToRegister={() => setCurrentView('register')} 
+            onBack={() => setCurrentView('app')}
+        />
+      );
+  }
+
+  if (currentView === 'register') {
+      return <Register onRegisterSuccess={handleLoginSuccess} onGoToLogin={() => setCurrentView('login')} />;
+  }
 
   if (currentView === 'docs') {
     return <Documentation mode="user" onBack={() => setCurrentView('app')} />;
@@ -695,7 +760,9 @@ const App: React.FC = () => {
           history={history}
           onBack={() => setCurrentView('app')}
           onOpenPro={() => setShowUpgradeModal(true)}
-          onOpenAdmin={() => setCurrentView('admin-dashboard')}
+          onOpenAdmin={() => {
+              if (user?.role === 'admin') setCurrentView('admin-dashboard');
+          }}
         />
       </>
     );
@@ -707,7 +774,10 @@ const App: React.FC = () => {
             onBack={() => setCurrentView('app')} 
             onOpenDocs={() => setCurrentView('admin-docs')}
             currentUserCredits={credits}
-            onUpdateUserCredits={setCredits}
+            onUpdateUserCredits={(val) => {
+                setCredits(val);
+                if (user) setUser({...user, credits: val});
+            }}
             plans={plans}
             onUpdatePlans={setPlans}
             appConfig={appConfig}
@@ -756,11 +826,26 @@ const App: React.FC = () => {
       />
 
       <div className="w-full max-w-4xl relative z-10">
+        <div className="flex items-center justify-end mb-2 gap-2">
+             {user ? (
+                 <div className="flex items-center gap-2">
+                     <span className="text-xs text-gray-500">Olá, {user.name}</span>
+                     <button onClick={handleLogout} className="text-xs text-red-400 hover:text-red-300 underline">Sair</button>
+                 </div>
+             ) : null}
+        </div>
+
         <Header 
             credits={credits} 
-            onOpenPro={() => setShowUpgradeModal(true)} 
+            onOpenPro={handleOpenProAction} 
             onOpenDocs={() => setCurrentView('docs')}
-            onOpenProfile={() => setCurrentView('user-dashboard')}
+            onOpenProfile={() => {
+                if (user) {
+                    setCurrentView('user-dashboard');
+                } else {
+                    setCurrentView('login');
+                }
+            }}
             appConfig={appConfig}
         />
         
@@ -778,7 +863,9 @@ const App: React.FC = () => {
                     onSubmit={handleGenerateNews}
                     isLoading={isLoading}
                     credits={credits}
-                    onOpenPro={() => setShowUpgradeModal(true)}
+                    onOpenPro={handleOpenProAction}
+                    onLoginRequired={() => setCurrentView('login')}
+                    isLoggedIn={!!user}
                 />
              </div>
           </div>

@@ -2,7 +2,24 @@
 import { GoogleGenAI } from "@google/genai";
 import type { GeneratedNews } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Função auxiliar para obter a API Key de forma segura em diferentes ambientes (Vite, Next, CRA, etc)
+const getApiKey = () => {
+  // Tenta processo padrão (Node/CRA)
+  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+    return process.env.API_KEY;
+  }
+  // Tenta Vite (import.meta.env)
+  if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
+    return (import.meta as any).env.VITE_API_KEY || (import.meta as any).env.API_KEY;
+  }
+  return '';
+};
+
+const apiKey = getApiKey();
+
+// Inicializa com a chave obtida de forma segura.
+// Removemos o fallback direto para process.env.API_KEY no construtor para evitar ReferenceError na Vercel.
+const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 
 // --- Analytics Helper ---
 const logAnalytics = (data: { 
@@ -29,6 +46,7 @@ const logAnalytics = (data: {
 
 export const generateNewsArticle = async (theme: string, topic: string, tone: string): Promise<GeneratedNews> => {
   const startTime = performance.now();
+  
   const today = new Date().toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
   const prompt = `

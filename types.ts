@@ -34,3 +34,13 @@ export interface AppConfig {
   whatsappNumber: string;
   contactMessage: string;
 }
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'user' | 'admin';
+  plan: string;
+  credits: number;
+  avatar?: string;
+}
