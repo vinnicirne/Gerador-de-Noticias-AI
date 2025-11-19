@@ -1,42 +1,49 @@
+
 import { GoogleGenAI } from "@google/genai";
-import { createClient } from '@supabase/supabase-js'; 
-import type { GeneratedNews } from '../types'; 
+import { supabase, isSupabaseConfigured } from './supabase';
+import type { GeneratedNews } from '../types';
 
-// --- Configuração de Chaves (Apenas Backend/Servidor) ---
-// Estas variáveis são lidas do ambiente do servidor Vercel (SEM PREFIXO VITE_)
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const SUPABASE_URL = process.env.SUPABASE_URL || '';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''; 
-
-// Cliente de Servidor (SERVICE_ROLE) para Débito de Crédito e Leitura Segura
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-    auth: { persistSession: false }
-});
-
-const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-
-
-export const generateNewsArticle = async (userId: string, theme: string, topic: string, tone: string): Promise<GeneratedNews> => {
-  
-  if (!SUPABASE_SERVICE_KEY || !GEMINI_API_KEY) {
-      throw new Error("Erro de Servidor: Chaves de API (Gemini/Supabase) ausentes no ambiente Vercel.");
+// Função auxiliar para obter a API Key
+const getApiKey = () => {
+  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+    return process.env.API_KEY;
   }
+  if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
+    return (import.meta as any).env.VITE_API_KEY || (import.meta as any).env.API_KEY;
+  }
+  return '';
+};
+
+const apiKey = getApiKey();
+const ai = new GoogleGenAI({ apiKey: apiKey || '' });
+
+export const generateNewsArticle = async (theme: string, topic: string, tone: string): Promise<GeneratedNews> => {
   
-  // 1. VERIFICAÇÃO DE SALDO (Segurança da Transação)
-  const { data: userProfile, error: profileError } = await supabaseAdmin
+  // 1. Verificação de Segurança e Créditos
+  if (!isSupabaseConfigured()) {
+      throw new Error("Erro de Configuração: Supabase URL ausente. O sistema de créditos e login não está ativo.");
+  }
+
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) {
+      throw new Error("Usuário não autenticado. Faça login para continuar.");
+  }
+
+  // Verificar saldo no banco de dados
+  const { data: userProfile, error: profileError } = await supabase
       .from('usuarios')
       .select('creditos_saldo')
-      .eq('id', userId)
+      .eq('id', user.id)
       .single();
 
   if (profileError || !userProfile) {
-      throw new Error("Erro ao buscar saldo. Tente logar novamente.");
+      throw new Error("Erro ao verificar saldo da conta.");
   }
 
-  // LÓGICA DE PAYWALL: Retorna erro se créditos <= 0
   if (userProfile.creditos_saldo <= 0) {
-      // Mensagem que o Frontend deve interpretar como 402/Paywall
-      throw new Error("Saldo insuficiente. Por favor, recarregue seus créditos."); 
+      // Simula erro HTTP 402 Payment Required
+      throw new Error("Saldo insuficiente. Por favor, recarregue seus créditos.");
   }
 
   const startTime = performance.now();
@@ -52,20 +59,37 @@ export const generateNewsArticle = async (userId: string, theme: string, topic: 
     
     --- 1. DEFINIÇÃO DA ESTRATÉGIA (Mentalmente) ---
     Antes de escrever, defina uma "Palavra-chave de Foco" (Focus Keyword).
+    Exemplo: Se o tema é "Vitória do Flamengo", a palavra-chave pode ser "Flamengo vence".
     
     --- 2. REGRAS OBRIGATÓRIAS DE SEO (CRÍTICO - NÃO IGNORE) ---
-    A "Palavra-chave de Foco" DEVE aparecer EXATAMENTE (ipsis litteris) nos seguintes lugares:
+    Para obter pontuação máxima no Rank Math, você DEVE seguir estas regras estritas:
+    
+    A. A "Palavra-chave de Foco" DEVE aparecer EXATAMENTE (ipsis litteris) nos seguintes lugares:
        1. No Título H1.
        2. No Slug (URL amigável).
        3. Na Meta Description.
        4. **CRUCIAL**: Na PRIMEIRA FRASE do primeiro parágrafo do texto. O texto deve começar já abordando a palavra-chave.
        5. Em pelo menos um subtítulo (H2).
-    
+       
+    B. Densidade: A palavra-chave deve aparecer naturalmente ao longo do texto (aprox 1-2%).
+
     --- 3. CONTEÚDO ---
     Analise o input:
     Tema: ${theme}
     ${topic ? `Tópico Específico: ${topic}` : ''}
+    
+    - Se for notícia recente: Reporte fatos, dados e citações.
+    - Se for futuro/tendência: Faça uma análise preditiva.
+    - Use Markdown: **Negrito**, ## H2, - Listas, 1. Listas numeradas.
     - Mínimo de 450 palavras.
+
+    --- 4. TÍTULO E META ---
+    - SEO Title: Clickbait saudável (ou agressivo, dependendo do Tom).
+    - Slug: Curto, minúsculas e hífens.
+    - Meta Description: Resumo instigante de até 160 caracteres contendo a palavra-chave.
+
+    --- 5. VISUAL ---
+    Crie um "imagePrompt" em inglês detalhado para gerar uma capa realista e cinematográfica.
 
     --- FORMATO DE RESPOSTA (JSON APENAS) ---
     Responda APENAS com este JSON válido:
@@ -96,7 +120,6 @@ export const generateNewsArticle = async (userId: string, theme: string, topic: 
     const responseText = response.text;
     let parsedContent: GeneratedNews;
     
-    // Lógica robusta de parse JSON
     try {
         let cleanText = responseText
             .replace(/^```json\s*/, "")
@@ -104,6 +127,7 @@ export const generateNewsArticle = async (userId: string, theme: string, topic: 
             .replace(/\s*```$/, "")
             .trim();
         
+        // Tenta encontrar JSON dentro do texto se houver lixo ao redor
         const firstBrace = cleanText.indexOf('{');
         const lastBrace = cleanText.lastIndexOf('}');
         if (firstBrace !== -1 && lastBrace !== -1) {
@@ -116,7 +140,6 @@ export const generateNewsArticle = async (userId: string, theme: string, topic: 
         throw new Error("Erro ao processar resposta da IA. Tente novamente.");
     }
 
-    // Extração de Grounding Sources
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
     const sources = groundingChunks
       .map((chunk: any) => chunk.web)
@@ -134,27 +157,28 @@ export const generateNewsArticle = async (userId: string, theme: string, topic: 
       sources,
     };
 
-    // 3. DÉBITO E HISTÓRICO (Usando o cliente ADMIN)
+    // 3. Transação de Débito e Histórico (Atomic Operation)
+    // Reduz saldo
     const newBalance = userProfile.creditos_saldo - 1;
-    
-    // Débito
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await supabase
         .from('usuarios')
         .update({ creditos_saldo: newBalance })
-        .eq('id', userId);
+        .eq('id', user.id);
 
     if (updateError) console.error("Erro ao debitar crédito", updateError);
 
-    // Histórico
-    await supabaseAdmin
+    // Salva histórico no Supabase
+    const { error: historyError } = await supabase
         .from('historico_prompts')
         .insert([{
-            user_id: userId,
+            user_id: user.id,
             prompt_text: `${theme} - ${topic} (${tone})`,
             response_json: finalNews,
             timestamp: new Date().toISOString()
         }]);
-    
+
+    if (historyError) console.error("Erro ao salvar histórico", historyError);
+
     return finalNews;
     
   } catch (error) {
