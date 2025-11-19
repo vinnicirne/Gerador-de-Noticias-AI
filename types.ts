@@ -1,6 +1,5 @@
 
 export interface GeneratedNews {
-  id?: string;
   title: string;
   body: string;
   imagePrompt: string;
@@ -15,7 +14,6 @@ export interface GeneratedNews {
     metaDescription: string;
     tags: string[];
   };
-  created_at?: string;
 }
 
 export interface PlanConfig {
@@ -41,10 +39,8 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'user' | 'admin' | 'super_admin';
+  role: 'user' | 'admin';
   plan: string;
   credits: number;
   avatar?: string;
-  status?: string;
-  created_at?: string;
 }
