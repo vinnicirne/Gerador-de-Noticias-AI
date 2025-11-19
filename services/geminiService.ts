@@ -19,7 +19,7 @@ const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 
 export const generateNewsArticle = async (theme: string, topic: string, tone: string): Promise<GeneratedNews> => {
   
-  // 1. Verificação de Segurança e Créditos (Backend Simulation)
+  // 1. Verificação de Segurança e Créditos
   const { data: { user } } = await supabase.auth.getUser();
   
   if (!user) {
@@ -153,7 +153,7 @@ export const generateNewsArticle = async (theme: string, topic: string, tone: st
       sources,
     };
 
-    // 3. Transação de Débito e Histórico (Atomic Operation simulation)
+    // 3. Transação de Débito e Histórico (Atomic Operation)
     // Reduz saldo
     const newBalance = userProfile.creditos_saldo - 1;
     const { error: updateError } = await supabase

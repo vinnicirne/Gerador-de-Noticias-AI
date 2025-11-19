@@ -11,9 +11,22 @@ const getEnvVar = (key: string, viteKey: string) => {
     return '';
 };
 
-// Fallback para evitar crash se as variáveis não estiverem definidas (comum na primeira execução)
-// O App não funcionará corretamente sem as chaves reais, mas carregará a UI para mostrar os erros.
-const supabaseUrl = getEnvVar('REACT_APP_SUPABASE_URL', 'VITE_SUPABASE_URL') || 'https://placeholder.supabase.co';
-const supabaseKey = getEnvVar('REACT_APP_SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY') || 'placeholder';
+// Verifica se as chaves são válidas (não são placeholders)
+const url = getEnvVar('REACT_APP_SUPABASE_URL', 'VITE_SUPABASE_URL');
+const key = getEnvVar('REACT_APP_SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY');
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const isSupabaseConfigured = () => {
+    return url && key && url !== 'https://placeholder.supabase.co' && key !== 'placeholder';
+};
+
+// Fallback seguro
+const supabaseUrl = url || 'https://placeholder.supabase.co';
+const supabaseKey = key || 'placeholder';
+
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false // Evita erros de redirect em alguns ambientes
+    }
+});
