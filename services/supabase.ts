@@ -11,17 +11,19 @@ const getEnvVar = (key: string, viteKey: string) => {
     return '';
 };
 
-// Verifica se as chaves são válidas (não são placeholders)
+// Obtém as variáveis de ambiente
 const url = getEnvVar('REACT_APP_SUPABASE_URL', 'VITE_SUPABASE_URL');
 const key = getEnvVar('REACT_APP_SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY');
 
 export const isSupabaseConfigured = () => {
-    return url && key && url !== 'https://placeholder.supabase.co' && key !== 'placeholder';
+    return !!url && !!key;
 };
 
-// Fallback seguro
+// Se não houver URL configurada, usamos um valor fictício para satisfazer a validação
+// da biblioteca 'createClient' e evitar o erro "supabaseUrl is required".
+// O app carregará, mas operações que dependem do Supabase falharão se não houver config real.
 const supabaseUrl = url || 'https://placeholder.supabase.co';
-const supabaseKey = key || 'placeholder';
+const supabaseKey = key || 'placeholder-key';
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
     auth: {
