@@ -1,6 +1,6 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { supabase } from './supabase';
+import { supabase, isSupabaseConfigured } from './supabase';
 import type { GeneratedNews } from '../types';
 
 // Função auxiliar para obter a API Key
@@ -20,6 +20,10 @@ const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 export const generateNewsArticle = async (theme: string, topic: string, tone: string): Promise<GeneratedNews> => {
   
   // 1. Verificação de Segurança e Créditos
+  if (!isSupabaseConfigured()) {
+      throw new Error("Erro de Configuração: Supabase URL ausente. O sistema de créditos e login não está ativo.");
+  }
+
   const { data: { user } } = await supabase.auth.getUser();
   
   if (!user) {

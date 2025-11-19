@@ -1,9 +1,11 @@
 
-import { supabase } from './supabase';
+import { supabase, isSupabaseConfigured } from './supabase';
 import type { User } from '../types';
 
 export const authService = {
   async login(email: string, password: string): Promise<User> {
+    if (!isSupabaseConfigured()) throw new Error("Supabase não configurado. Verifique as variáveis de ambiente (VITE_SUPABASE_URL).");
+
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     
     if (error) throw error;
@@ -33,6 +35,8 @@ export const authService = {
   },
 
   async register(name: string, email: string, password: string): Promise<User> {
+    if (!isSupabaseConfigured()) throw new Error("Supabase não configurado. Impossível registrar usuários.");
+
     const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -54,10 +58,13 @@ export const authService = {
   },
 
   async logout(): Promise<void> {
+    if (!isSupabaseConfigured()) return;
     await supabase.auth.signOut();
   },
 
   async getCurrentSession(): Promise<User | null> {
+    if (!isSupabaseConfigured()) return null;
+    
     try {
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error || !session?.user) return null;
