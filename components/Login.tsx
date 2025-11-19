@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { authService } from '../services/authService';
 import type { User } from '../types';
@@ -22,7 +21,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onGoToRegister, onBack })
     setError(null);
 
     try {
-      const user = await authService.login(email, password, isAdminMode ? 'admin' : 'user');
+      const user = await authService.login(email, password);
       onLoginSuccess(user);
     } catch (err) {
       if (err instanceof Error) {
