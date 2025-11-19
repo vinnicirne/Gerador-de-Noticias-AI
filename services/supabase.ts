@@ -1,38 +1,37 @@
-// Arquivo: src/services/supabaseClient.ts (Substitui supabase.ts e supabase2.ts)
 
 import { createClient } from '@supabase/supabase-js';
 
-// --- Função para obter variáveis (Simplificada e segura para Frontend) ---
-// O Vite expõe VITE_... no objeto import.meta.env
-const getFrontendEnvVar = (key: string): string => {
-    // Tenta ler VITE_... (padrão Vite)
+const getEnvVar = (key: string, viteKey: string) => {
+    if (typeof process !== 'undefined' && process.env && process.env[key]) {
+        return process.env[key];
+    }
     if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
-        return (import.meta as any).env[key] || '';
+        return (import.meta as any).env[viteKey] || (import.meta as any).env[key];
     }
     return '';
 };
 
-const supabaseUrl = getFrontendEnvVar('VITE_SUPABASE_URL');
-const supabaseAnonKey = getFrontendEnvVar('VITE_SUPABASE_ANON_KEY');
+// Obtém as variáveis de ambiente
+const url = getEnvVar('REACT_APP_SUPABASE_URL', 'VITE_SUPABASE_URL');
+const key = getEnvVar('REACT_APP_SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY');
 
-// Verifica se as chaves necessárias para o FRONTEND existem.
-export const isSupabaseConfigured = (): boolean => {
-    return !!supabaseUrl && !!supabaseAnonKey;
+if (!url || !key) {
+    console.warn("⚠️ Supabase não configurado. O app rodará em modo limitado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY para habilitar autenticação e banco de dados.");
+}
+
+export const isSupabaseConfigured = () => {
+    return !!url && !!key;
 };
 
-// Se não configurado, usamos valores inválidos para que o createClient não quebre, mas isSupabaseConfigured() retorne false.
-const finalUrl = supabaseUrl || 'https://supabase-not-configured.invalid';
-const finalKey = supabaseAnonKey || 'placeholder-key';
+// Se não houver URL configurada, usamos um valor fictício para satisfazer a validação da lib.
+// Usamos .invalid (RFC 2606) para indicar claramente que é um domínio inválido.
+const supabaseUrl = url || 'https://supabase-not-configured.invalid';
+const supabaseKey = key || 'placeholder-key';
 
-export const supabase = createClient(finalUrl, finalKey, {
+export const supabase = createClient(supabaseUrl, supabaseKey, {
     auth: {
-        // Mantém a sessão ativa
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: true
+        detectSessionInUrl: false
     }
 });
-
-if (!isSupabaseConfigured()) {
-    console.warn("⚠️ Supabase não configurado. Funções de Auth estão desativadas.");
-}
