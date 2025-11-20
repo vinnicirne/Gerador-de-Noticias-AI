@@ -11,27 +11,22 @@ const getEnvVar = (key: string, viteKey: string) => {
     return '';
 };
 
-// Obtém as variáveis de ambiente
+// Verifica se as chaves são válidas (não são placeholders)
 const url = getEnvVar('REACT_APP_SUPABASE_URL', 'VITE_SUPABASE_URL');
 const key = getEnvVar('REACT_APP_SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY');
 
-if (!url || !key) {
-    console.warn("⚠️ Supabase não configurado. O app rodará em modo limitado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY para habilitar autenticação e banco de dados.");
-}
-
 export const isSupabaseConfigured = () => {
-    return !!url && !!key;
+    return url && key && url !== 'https://placeholder.supabase.co' && key !== 'placeholder';
 };
 
-// Se não houver URL configurada, usamos um valor fictício para satisfazer a validação da lib.
-// Usamos .invalid (RFC 2606) para indicar claramente que é um domínio inválido.
-const supabaseUrl = url || 'https://supabase-not-configured.invalid';
-const supabaseKey = key || 'placeholder-key';
+// Fallback seguro
+const supabaseUrl = url || 'https://placeholder.supabase.co';
+const supabaseKey = key || 'placeholder';
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
     auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: false
+        detectSessionInUrl: false // Evita erros de redirect em alguns ambientes
     }
 });
