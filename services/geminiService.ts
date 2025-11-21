@@ -22,47 +22,47 @@ export const generateNewsArticle = async (theme: string, topic: string, tone: st
   const today = new Date().toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
   const prompt = `
-    Aja como um jornalista sênior e especialista em SEO (Rank Math/Yoast).
+    Aja como um jornalista sênior e especialista em SEO com nota 100/100 no Rank Math e Yoast.
     
     CONTEXTO TEMPORAL: Hoje é ${today}. Considere esta data para termos como "ontem", "hoje" ou "semana passada".
     TOM DE VOZ EXIGIDO: ${tone}. Adapte o vocabulário e a estrutura das frases para este estilo.
 
-    Sua missão é escrever um artigo viral e tecnicamente perfeito para SEO.
+    Sua missão é escrever um artigo viral e tecnicamente PERFEITO para SEO, garantindo uma pontuação de 100/100 no Rank Math.
     
     --- 1. DEFINIÇÃO DA ESTRATÉGIA (Mentalmente) ---
     Antes de escrever, defina uma "Palavra-chave de Foco" (Focus Keyword).
     Exemplo: Se o tema é "Vitória do Flamengo", a palavra-chave pode ser "Flamengo vence".
     
-    --- 2. REGRAS OBRIGATÓRIAS DE SEO (CRÍTICO - NÃO IGNORE) ---
-    Para obter pontuação máxima no Rank Math, você DEVE seguir estas regras estritas:
+    --- 2. REGRAS CRÍTICAS PARA SEO SCORE 100/100 (NÃO IGNORE NENHUMA) ---
     
-    A. A "Palavra-chave de Foco" DEVE aparecer EXATAMENTE (ipsis litteris) nos seguintes lugares:
-       1. No Título H1.
-       2. No Slug (URL amigável).
-       3. Na Meta Description.
-       4. **CRUCIAL**: Na PRIMEIRA FRASE do primeiro parágrafo do texto. O texto deve começar já abordando a palavra-chave.
-       5. Em pelo menos um subtítulo (H2).
-       
-    B. Densidade: A palavra-chave deve aparecer naturalmente ao longo do texto (aprox 1-2%).
+    A. PALAVRA-CHAVE DE FOCO:
+       A "Palavra-chave de Foco" DEVE aparecer EXATAMENTE (ipsis litteris) nos seguintes lugares:
+       1. No 'title' (H1).
+       2. No 'seo.slug' (URL amigável).
+       3. Na 'seo.metaDescription'.
+       4. **CRUCIAL**: Na PRIMEIRA FRASE do primeiro parágrafo do 'body'.
+       5. Em pelo menos um subtítulo (## H2).
+       6. **CRÍTICO PARA IMAGENS**: No 'seo.altText' da imagem.
 
-    --- 3. CONTEÚDO ---
-    Analise o input:
+    B. ESTRUTURA DO CONTEÚDO:
+       1. **Links Internos**: Inclua 2-3 links internos FALSOS para outros artigos do mesmo site. Formato: \`[texto âncora relevante](/slug-do-artigo-relacionado/)\`.
+       2. **Links Externos**: Inclua 1-2 links externos para fontes de ALTA AUTORIDADE (ex: Wikipedia, grandes portais de notícias). Formato: \`[texto âncora](https://...)\`.
+       3. **Parágrafos**: Mantenha os parágrafos EXTREMAMENTE curtos (no máximo 3 frases) para otimizar a legibilidade em dispositivos móveis. NUNCA FAÇA PARÁGRAFOS LONGOS.
+       4. **Tamanho**: O 'body' deve ter no mínimo 500 palavras.
+
+    C. TÍTULO E META:
+       1. **SEO Title**: Use 'Palavras de Poder' (Ex: Incrível, Segredo, Chocante, Guia Definitivo) e/ou números para maximizar o CTR.
+       2. **Slug**: Mantenha o slug com menos de 75 caracteres.
+       3. **Meta Description**: Resumo instigante de até 160 caracteres contendo a palavra-chave.
+
+    D. VISUAL:
+       1. **Image Prompt**: Crie um 'imagePrompt' em inglês detalhado para gerar uma capa realista.
+       2. **Alt Text**: Crie um 'seo.altText' descritivo para a imagem que OBRIGATORIAMENTE contenha a "Palavra-chave de Foco" exata. Esta regra é inegociável para a pontuação de SEO.
+
+    --- ANÁLISE DO INPUT ---
     Tema: ${theme}
     ${topic ? `Tópico Específico: ${topic}` : ''}
     
-    - Se for notícia recente: Reporte fatos, dados e citações.
-    - Se for futuro/tendência: Faça uma análise preditiva.
-    - Use Markdown: **Negrito**, ## H2, - Listas, 1. Listas numeradas.
-    - Mínimo de 450 palavras.
-
-    --- 4. TÍTULO E META ---
-    - SEO Title: Clickbait saudável (ou agressivo, dependendo do Tom).
-    - Slug: Curto, minúsculas e hífens.
-    - Meta Description: Resumo instigante de até 160 caracteres contendo a palavra-chave.
-
-    --- 5. VISUAL ---
-    Crie um "imagePrompt" em inglês detalhado para gerar uma capa realista e cinematográfica.
-
     --- FORMATO DE RESPOSTA (JSON APENAS) ---
     Responda APENAS com este JSON válido:
     {
@@ -71,10 +71,11 @@ export const generateNewsArticle = async (theme: string, topic: string, tone: st
       "imagePrompt": "Detailed prompt in English...",
       "seo": {
         "focusKeyword": "A palavra-chave exata",
-        "seoTitle": "Título SEO",
+        "seoTitle": "Título SEO com Power Word",
         "slug": "slug-com-a-palavra-chave",
-        "metaDescription": "Descrição...",
-        "tags": ["tag1", "tag2"]
+        "metaDescription": "Descrição de até 160 caracteres...",
+        "tags": ["tag1", "tag2"],
+        "altText": "Texto alternativo da imagem contendo a palavra-chave"
       }
     }
   `;

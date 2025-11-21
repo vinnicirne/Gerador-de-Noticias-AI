@@ -156,7 +156,7 @@ const App: React.FC = () => {
 
   const handleSeoCopy = () => {
     if (!generatedNews) return;
-    const seoText = `Focus Keyword: ${generatedNews.seo.focusKeyword}\n\nSEO Title: ${generatedNews.seo.seoTitle}\n\nSlug: ${generatedNews.seo.slug}\n\nMeta Description: ${generatedNews.seo.metaDescription}\n\nTags: ${generatedNews.seo.tags.join(', ')}`;
+    const seoText = `Focus Keyword: ${generatedNews.seo.focusKeyword}\n\nSEO Title: ${generatedNews.seo.seoTitle}\n\nSlug: ${generatedNews.seo.slug}\n\nMeta Description: ${generatedNews.seo.metaDescription}\n\nAlt Text: ${generatedNews.seo.altText}\n\nTags: ${generatedNews.seo.tags.join(', ')}`;
     navigator.clipboard.writeText(seoText);
     setSeoCopyButtonText('Copiado!');
     setTimeout(() => setSeoCopyButtonText('Copiar'), 2000);
@@ -256,7 +256,7 @@ const App: React.FC = () => {
                 </button>
              </div>
 
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-black p-4 rounded-xl border border-gray-800">
                    <h4 className="text-gray-500 text-xs uppercase font-bold mb-1">Focus Keyword</h4>
                    <p className="text-green-400 font-bold font-mono">{generatedNews.seo.focusKeyword}</p>
@@ -265,10 +265,16 @@ const App: React.FC = () => {
                    <h4 className="text-gray-500 text-xs uppercase font-bold mb-1">SEO Title</h4>
                    <p className="text-white text-sm">{generatedNews.seo.seoTitle}</p>
                 </div>
-                <div className="bg-black p-4 rounded-xl border border-gray-800">
+                <div className="bg-black p-4 rounded-xl border border-gray-800 md:col-span-2">
                    <h4 className="text-gray-500 text-xs uppercase font-bold mb-1">URL Slug</h4>
                    <p className="text-gray-400 text-sm font-mono text-ellipsis overflow-hidden">{generatedNews.seo.slug}</p>
                 </div>
+                {generatedNews.seo.altText && (
+                  <div className="bg-black p-4 rounded-xl border border-gray-800 md:col-span-2">
+                    <h4 className="text-gray-500 text-xs uppercase font-bold mb-1">Texto ALT da Imagem (SEO)</h4>
+                    <p className="text-gray-400 text-sm font-mono">{generatedNews.seo.altText}</p>
+                  </div>
+                )}
              </div>
 
              <div className="bg-gradient-to-r from-gray-900 to-black p-4 rounded-xl border border-gray-800 relative overflow-hidden group">
@@ -293,7 +299,7 @@ const App: React.FC = () => {
                 </div>
                 <pre className="bg-gray-900/50 p-3 rounded-md text-gray-400 text-xs font-mono whitespace-pre-wrap select-all overflow-x-auto">
                   <code>
-                    {`Focus Keyword: ${generatedNews.seo.focusKeyword}\n\nSEO Title: ${generatedNews.seo.seoTitle}\n\nSlug: ${generatedNews.seo.slug}\n\nMeta Description: ${generatedNews.seo.metaDescription}\n\nTags: ${generatedNews.seo.tags.join(', ')}`}
+                    {`Focus Keyword: ${generatedNews.seo.focusKeyword}\n\nSEO Title: ${generatedNews.seo.seoTitle}\n\nSlug: ${generatedNews.seo.slug}\n\nMeta Description: ${generatedNews.seo.metaDescription}\n\nAlt Text: ${generatedNews.seo.altText}\n\nTags: ${generatedNews.seo.tags.join(', ')}`}
                   </code>
                 </pre>
               </div>

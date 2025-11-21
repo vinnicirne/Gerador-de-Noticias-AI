@@ -14,6 +14,7 @@ export interface GeneratedNews {
     slug: string;
     metaDescription: string;
     tags: string[];
+    altText: string;
   };
   created_at?: string;
 }
