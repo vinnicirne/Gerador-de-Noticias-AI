@@ -16,17 +16,8 @@ const getApiKey = () => {
 const apiKey = getApiKey();
 const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 
-export const generateNewsArticle = async (theme: string, topic: string, tone: string): Promise<GeneratedNews> => {
+export const generateNewsArticle = async (theme: string, topic: string, tone: string, userId: string): Promise<GeneratedNews> => {
   
-  // 1. Verificação de Autenticação
-  if (isSupabaseConfigured() && supabase) {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-        throw new Error("Usuário não autenticado. Faça login para continuar.");
-    }
-  }
-
   const startTime = performance.now();
   const today = new Date().toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -89,7 +80,7 @@ export const generateNewsArticle = async (theme: string, topic: string, tone: st
   `;
 
   try {
-    // 2. Chamada Gemini AI
+    // Chamada Gemini AI
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
@@ -138,24 +129,33 @@ export const generateNewsArticle = async (theme: string, topic: string, tone: st
       sources,
     };
 
-    // 3. Salva Histórico (se usuário logado)
-    if (isSupabaseConfigured() && supabase) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-            const { error: historyError } = await supabase
-                .from('historico_prompts')
-                .insert([{
-                    user_id: user.id,
-                    prompt_text: `${theme} - ${topic} (${tone})`,
-                    response_json: finalNews,
-                    timestamp: new Date().toISOString()
-                }]);
-
-            if (historyError) console.error("Erro ao salvar histórico", historyError);
-        }
+    if (isSupabaseConfigured() && supabase && userId) {
+      const { data: savedRecord, error: dbError } = await supabase
+        .from('historico_prompts')
+        .insert({
+          user_id: userId,
+          prompt_text: `Tema: ${theme}, Tópico: ${topic || 'Geral'}, Tom: ${tone}`,
+          response_json: finalNews,
+        })
+        .select()
+        .single();
+      
+      if (dbError) {
+        console.error("Erro ao salvar no histórico:", dbError);
+      } else if (savedRecord) {
+        const content = savedRecord.response_json as GeneratedNews;
+        return {
+          ...content,
+          id: savedRecord.id,
+          created_at: savedRecord.timestamp,
+        };
+      }
     }
 
-    return finalNews;
+    return {
+        ...finalNews,
+        created_at: new Date().toISOString(),
+    };
     
   } catch (error) {
     console.error("Erro no processo de geração:", error);

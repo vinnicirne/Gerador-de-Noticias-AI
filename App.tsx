@@ -45,6 +45,8 @@ const App: React.FC = () => {
   const [appConfig, setAppConfig] = useState<AppConfig>(DEFAULT_CONFIG);
   const [history, setHistory] = useState<GeneratedNews[]>([]);
 
+  const [seoCopyButtonText, setSeoCopyButtonText] = useState<string>('Copiar');
+
   // --- AUTH INITIALIZATION ---
   useEffect(() => {
       const initAuth = async () => {
@@ -60,9 +62,10 @@ const App: React.FC = () => {
               setIsAuthLoading(false);
           }
       };
-      initAuth();
+      
+      if (isSupabaseConfigured()) {
+          initAuth();
 
-      if (isSupabaseConfigured() && supabase) {
           const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
               if (event === 'SIGNED_OUT') {
                   setUser(null);
@@ -77,6 +80,8 @@ const App: React.FC = () => {
               }
           });
           return () => subscription.unsubscribe();
+      } else {
+          setIsAuthLoading(false);
       }
   }, []);
 
@@ -108,10 +113,10 @@ const App: React.FC = () => {
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!user) {
-        setCurrentView('login');
-        return;
+      setCurrentView('login');
+      return;
     }
 
     setIsLoading(true);
@@ -119,10 +124,9 @@ const App: React.FC = () => {
     setGeneratedNews(null);
 
     try {
-      const result = await generateNewsArticle(theme, topic, tone);
+      const result = await generateNewsArticle(theme, topic, tone, user.id);
       setGeneratedNews(result);
       setHistory(prev => [result, ...prev]);
-
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
@@ -148,6 +152,14 @@ const App: React.FC = () => {
       await authService.logout();
       setUser(null);
       setCurrentView('login');
+  };
+
+  const handleSeoCopy = () => {
+    if (!generatedNews) return;
+    const seoText = `Focus Keyword: ${generatedNews.seo.focusKeyword}\n\nSEO Title: ${generatedNews.seo.seoTitle}\n\nSlug: ${generatedNews.seo.slug}\n\nMeta Description: ${generatedNews.seo.metaDescription}\n\nTags: ${generatedNews.seo.tags.join(', ')}`;
+    navigator.clipboard.writeText(seoText);
+    setSeoCopyButtonText('Copiado!');
+    setTimeout(() => setSeoCopyButtonText('Copiar'), 2000);
   };
 
   // --- RENDER ---
@@ -266,6 +278,26 @@ const App: React.FC = () => {
                   "{generatedNews.imagePrompt}"
                 </p>
              </div>
+
+             {/* SEO Data Block for easy copying */}
+              <div className="bg-black p-4 rounded-xl border border-green-900/40 space-y-3 shadow-lg">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-green-400 text-xs uppercase font-bold tracking-wider">Dados SEO (Rank Math / Yoast)</h4>
+                  <button
+                    onClick={handleSeoCopy}
+                    className="text-xs bg-green-900/30 hover:bg-green-900/60 text-green-300 font-mono px-3 py-1.5 rounded-md border border-green-900/50 transition-all w-24 text-center disabled:opacity-50"
+                    disabled={isLoading}
+                  >
+                    {seoCopyButtonText}
+                  </button>
+                </div>
+                <pre className="bg-gray-900/50 p-3 rounded-md text-gray-400 text-xs font-mono whitespace-pre-wrap select-all overflow-x-auto">
+                  <code>
+                    {`Focus Keyword: ${generatedNews.seo.focusKeyword}\n\nSEO Title: ${generatedNews.seo.seoTitle}\n\nSlug: ${generatedNews.seo.slug}\n\nMeta Description: ${generatedNews.seo.metaDescription}\n\nTags: ${generatedNews.seo.tags.join(', ')}`}
+                  </code>
+                </pre>
+              </div>
+
 
              <div className="bg-white text-black p-8 rounded-xl shadow-2xl">
                 <h1 className="text-3xl md:text-4xl font-bold mb-6 leading-tight border-b pb-4 border-gray-200">
