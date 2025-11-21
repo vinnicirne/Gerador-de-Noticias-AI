@@ -1,58 +1,100 @@
-// authService.ts - PRODUÇÃO
+import { supabase, isSupabaseConfigured } from './supabase';
+import type { User } from '../types';
+
 export const authService = {
   async login(email: string, password: string): Promise<User> {
+    if (!isSupabaseConfigured() || !supabase) throw new Error("Supabase não configurado. Verifique as variáveis de ambiente (VITE_SUPABASE_URL).");
+
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     
     if (error) throw error;
     if (!data.user) throw new Error("Usuário não encontrado.");
 
-    // Fetch profile from produção table
+    // 1. Tenta buscar o perfil na tabela pública 'usuarios'
     const { data: profile, error: profileError } = await supabase
         .from('usuarios')
         .select('*')
         .eq('id', data.user.id)
-        .single();
+        .maybeSingle();
 
-    if (profileError) {
-       console.warn("Perfil não encontrado, usando metadados de auth");
+    let finalProfile = profile;
+
+    // 2. AUTO-FIX (SELF-HEALING) no Login
+    // Se o perfil não existir, cria agora.
+    if (!finalProfile) {
+         console.warn("Perfil público não encontrado. Tentando criar registro de emergência...");
+         
+         const newProfile = {
+            id: data.user.id,
+            email: data.user.email,
+            name: data.user.user_metadata?.name || 'Usuário',
+            role: 'user',
+            status: 'active'
+         };
+         
+         const { data: created, error: insertError } = await supabase
+            .from('usuarios')
+            .insert([newProfile])
+            .select()
+            .single();
+
+         if (!insertError && created) {
+            finalProfile = created;
+         } else {
+            console.error("Não foi possível criar o perfil público (Erro DB):", insertError);
+            finalProfile = newProfile;
+         }
     }
+
+    // Normalização de Roles
+    const rawRole = finalProfile?.role || 'user';
+    const normalizedRole = (rawRole === 'super_admin' || rawRole === 'admin') ? 'admin' : 'user';
 
     return {
         id: data.user.id,
-        name: profile?.nome || data.user.user_metadata?.name || 'Usuário',
+        name: finalProfile?.name || 'Usuário',
         email: data.user.email || '',
-        role: (profile?.role === 'super_admin' || profile?.role === 'admin') ? 'admin' : 'user',
-        plan: 'Gratuito', // Podemos ajustar depois com join com planos
-        credits: profile?.creditos_saldo ?? 0,
-        status: 'active',
+        role: normalizedRole,
+        status: finalProfile?.status || 'active',
         created_at: data.user.created_at
     };
   },
 
   async register(name: string, email: string, password: string): Promise<User> {
+    if (!isSupabaseConfigured() || !supabase) throw new Error("Supabase não configurado.");
+
+    // 1. Cria autenticação no Supabase Auth
     const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { name } }
+        options: { 
+            data: { 
+                name, 
+                role: 'user' 
+            } 
+        }
     });
 
     if (error) throw error;
     if (!data.user) throw new Error("Erro ao criar conta.");
 
-    // Criar usuário na tabela de produção
+    // 2. GARANTIA DE PERFIL PÚBLICO
+    // Força a inserção na tabela 'usuarios' mesmo se o Trigger falhar.
+    // O 'upsert' com onConflict evita erros se o trigger já tiver funcionado.
+    const newProfile = {
+        id: data.user.id,
+        name: name,
+        email: email,
+        role: 'user',
+        status: 'active'
+    };
+
     const { error: profileError } = await supabase
         .from('usuarios')
-        .insert([{
-            id: data.user.id,
-            email: email,
-            nome: name,
-            role: 'user',
-            creditos_saldo: 3,
-            data_cadastro: new Date().toISOString()
-        }]);
+        .upsert(newProfile, { onConflict: 'id' });
 
     if (profileError) {
-        console.error("Erro ao criar perfil:", profileError);
+        console.warn("Aviso: Falha ao sincronizar perfil público:", profileError.message);
     }
 
     return {
@@ -60,13 +102,19 @@ export const authService = {
         name: name,
         email: email,
         role: 'user',
-        plan: 'Gratuito',
-        credits: 3,
-        status: 'active'
+        status: 'active',
+        created_at: new Date().toISOString()
     };
   },
 
+  async logout(): Promise<void> {
+    if (!isSupabaseConfigured() || !supabase) return;
+    await supabase.auth.signOut();
+  },
+
   async getCurrentSession(): Promise<User | null> {
+    if (!isSupabaseConfigured() || !supabase) return null;
+    
     try {
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error || !session?.user) return null;
@@ -75,16 +123,18 @@ export const authService = {
           .from('usuarios')
           .select('*')
           .eq('id', session.user.id)
-          .single();
-      
+          .maybeSingle();
+        
+        const userName = profile?.name || session.user.user_metadata?.name || 'Usuário';
+        const rawRole = profile?.role || session.user.user_metadata?.role || 'user';
+        const role = (rawRole === 'super_admin' || rawRole === 'admin') ? 'admin' : 'user';
+
          return {
           id: session.user.id,
-          name: profile?.nome || session.user.user_metadata?.name || 'Usuário',
+          name: userName,
           email: session.user.email || '',
-          role: (profile?.role === 'super_admin' || profile?.role === 'admin') ? 'admin' : 'user',
-          plan: 'Gratuito',
-          credits: profile?.creditos_saldo ?? 0,
-          status: 'active',
+          role,
+          status: profile?.status || 'active',
           created_at: session.user.created_at
       };
     } catch (error) {

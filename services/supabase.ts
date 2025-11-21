@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 
 const getEnvVar = (key: string, viteKey: string) => {
@@ -11,22 +10,27 @@ const getEnvVar = (key: string, viteKey: string) => {
     return '';
 };
 
-// Verifica se as chaves são válidas (não são placeholders)
+// Obtém as variáveis de ambiente
 const url = getEnvVar('REACT_APP_SUPABASE_URL', 'VITE_SUPABASE_URL');
 const key = getEnvVar('REACT_APP_SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY');
 
-export const isSupabaseConfigured = () => {
-    return url && key && url !== 'https://placeholder.supabase.co' && key !== 'placeholder';
+const initializeSupabase = () => {
+    if (!url || !key) {
+        console.warn("⚠️ Supabase não configurado. O app rodará em modo limitado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY para habilitar autenticação e banco de dados.");
+        return null;
+    }
+
+    return createClient(url, key, {
+        auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: false
+        }
+    });
 };
 
-// Fallback seguro
-const supabaseUrl = url || 'https://placeholder.supabase.co';
-const supabaseKey = key || 'placeholder';
+export const supabase = initializeSupabase();
 
-export const supabase = createClient(supabaseUrl, supabaseKey, {
-    auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: false // Evita erros de redirect em alguns ambientes
-    }
-});
+export const isSupabaseConfigured = () => {
+    return supabase !== null;
+};

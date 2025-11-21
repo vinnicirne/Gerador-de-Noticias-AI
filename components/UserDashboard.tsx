@@ -4,42 +4,19 @@ import type { GeneratedNews, User } from '../types';
 
 interface UserDashboardProps {
   user: User;
-  credits: number;
   history: GeneratedNews[];
   onBack: () => void;
-  onOpenPro: () => void;
   onOpenAdmin: () => void;
 }
 
-const UserDashboard: React.FC<UserDashboardProps> = ({ user, credits, history, onBack, onOpenPro, onOpenAdmin }) => {
+const UserDashboard: React.FC<UserDashboardProps> = ({ user, history, onBack, onOpenAdmin }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'history' | 'settings'>('overview');
 
   const renderOverview = () => (
     <div className="space-y-6 animate-fade-in">
-      {/* Credits Card */}
-      <div className="bg-gradient-to-r from-gray-900 to-black border border-green-900/50 rounded-xl p-6 relative overflow-hidden shadow-[0_0_15px_rgba(0,255,0,0.05)]">
-        <div className="absolute right-0 top-0 h-full w-32 bg-gradient-to-l from-green-900/10 to-transparent"></div>
-        <h3 className="text-green-500 text-xs uppercase font-bold mb-2 tracking-widest">Recursos Disponíveis</h3>
-        <div className="flex items-end gap-2">
-          <span className="text-5xl font-bold text-white">{credits}</span>
-          <span className="text-xl text-gray-500 mb-1 font-mono">/ 3 diários</span>
-        </div>
-        <div className="w-full bg-gray-900 h-2 rounded-full mt-4 overflow-hidden border border-gray-800">
-          <div 
-            className={`h-full ${credits > 0 ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.8)]' : 'bg-red-900'}`} 
-            style={{ width: `${(credits / 3) * 100}%` }}
-          ></div>
-        </div>
-        <p className="text-xs text-gray-500 mt-2 font-mono">Reset do sistema em: 12h 30m</p>
-        
-        <button onClick={onOpenPro} className="mt-6 w-full py-2 bg-green-900/20 hover:bg-green-900/40 text-green-400 border border-green-900 rounded-lg font-bold text-sm transition uppercase tracking-wide">
-          Adquirir Tokens
-        </button>
-      </div>
-
       {/* Recent Activity */}
       <div className="bg-black border border-green-900/30 rounded-xl p-6">
-        <h3 className="text-white font-bold mb-4">Log de Atividade</h3>
+        <h3 className="text-white font-bold mb-4">Log de Atividade Recente</h3>
         {history.length === 0 ? (
           <p className="text-gray-600 text-sm font-mono">Nenhum dado processado ainda.</p>
         ) : (
@@ -118,19 +95,6 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, credits, history, o
                <input type="email" value={user.email} className="w-full bg-gray-900 border border-gray-800 rounded p-2 text-gray-400 font-mono text-sm" readOnly />
              </div>
           </div>
-       </div>
-
-       <div className="bg-black border border-green-900/30 rounded-xl p-6">
-         <h4 className="text-white font-bold mb-2">Assinatura</h4>
-         <div className="flex justify-between items-center">
-           <div>
-             <p className="text-gray-400 text-sm">Plano Atual: <span className="text-white font-bold">{user.plan}</span></p>
-             <p className="text-gray-600 text-xs font-mono uppercase">Status: {user.status || 'Ativo'}</p>
-           </div>
-           <button onClick={onOpenPro} className="text-green-400 hover:text-green-300 text-xs font-bold border border-green-500/30 hover:border-green-500 px-4 py-2 rounded transition uppercase tracking-wider">
-             Fazer Upgrade
-           </button>
-         </div>
        </div>
        
        {/* Admin Dashboard Access */}

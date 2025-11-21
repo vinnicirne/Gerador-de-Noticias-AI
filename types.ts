@@ -18,17 +18,6 @@ export interface GeneratedNews {
   created_at?: string;
 }
 
-export interface PlanConfig {
-  id: string;
-  name: string;
-  price: number;
-  credits: number;
-  features: string[];
-  recurrence: 'Mensal' | 'Anual' | 'Pagamento Único';
-  active: boolean;
-  recommended?: boolean;
-}
-
 export interface AppConfig {
   appName: string;
   logoUrl: string;
@@ -41,10 +30,20 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'user' | 'admin' | 'super_admin';
-  plan: string;
-  credits: number;
+  role: 'user' | 'admin';
   avatar?: string;
   status?: string;
   created_at?: string;
+}
+
+// FIX: Add the missing PlanConfig interface based on its usage in UpgradeModal and CheckoutModal.
+export interface PlanConfig {
+  id: string;
+  name: string;
+  price: number;
+  credits: number;
+  features: string[];
+  recurrence: 'Mensal' | 'Anual' | 'Único';
+  recommended: boolean;
+  active: boolean;
 }

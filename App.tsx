@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import Header from './components/Header.tsx';
-import NewsGeneratorForm from './components/NewsGeneratorForm.tsx';
-import UpgradeModal from './components/UpgradeModal';
-import CheckoutModal from './components/CheckoutModal';
+import Header from './components/Header';
+import NewsGeneratorForm from './components/NewsGeneratorForm';
 import Documentation from './components/Documentation';
 import UserDashboard from './components/UserDashboard';
 import AdminDashboard from './components/AdminDashboard';
@@ -11,44 +9,10 @@ import Register from './components/Register';
 import { generateNewsArticle } from './services/geminiService';
 import { authService } from './services/authService';
 import { supabase, isSupabaseConfigured } from './services/supabase';
-import type { GeneratedNews, PlanConfig, AppConfig, User } from './types';
+import type { GeneratedNews, AppConfig, User } from './types';
 import { NEWS_THEMES, NEWS_TONES } from './constants';
 
 // --- CONSTANTS ---
-
-const INITIAL_PLANS: PlanConfig[] = [
-  { 
-    id: 'p_free', 
-    name: 'Gratuito', 
-    price: 0, 
-    credits: 3, 
-    recurrence: 'Mensal', 
-    features: ['Grounding: Incluso', 'Tons: Padrão (4)', 'Suporte: FAQ'], 
-    active: true,
-    recommended: false
-  },
-  { 
-    id: 'p_basic', 
-    name: 'Básico', 
-    price: 99.00, 
-    credits: 50, 
-    recurrence: 'Mensal', 
-    features: ['Grounding: Incluso', 'Tons: Todos', 'Custo/Crédito: R$ 1,98'], 
-    active: true,
-    recommended: false
-  },
-  { 
-    id: 'p_pro', 
-    name: 'Profissional', 
-    price: 349.00, 
-    credits: 200, 
-    recurrence: 'Mensal', 
-    features: ['Prioridade', 'Suporte 24h', 'Custo/Crédito: R$ 1,74'], 
-    active: true,
-    recommended: true
-  }
-];
-
 const DEFAULT_CONFIG: AppConfig = {
   appName: 'Gerador de Notícias',
   logoUrl: '',
@@ -79,14 +43,7 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   
   const [appConfig, setAppConfig] = useState<AppConfig>(DEFAULT_CONFIG);
-  const [plans, setPlans] = useState<PlanConfig[]>(INITIAL_PLANS);
-  
-  const [credits, setCredits] = useState<number>(0);
   const [history, setHistory] = useState<GeneratedNews[]>([]);
-
-  const [showUpgradeModal, setShowUpgradeModal] = useState<boolean>(false);
-  const [showCheckoutModal, setShowCheckoutModal] = useState<boolean>(false);
-  const [checkoutPlan, setCheckoutPlan] = useState<PlanConfig | null>(null);
 
   // --- AUTH INITIALIZATION ---
   useEffect(() => {
@@ -96,7 +53,6 @@ const App: React.FC = () => {
               const sessionUser = await authService.getCurrentSession();
               if (sessionUser) {
                   setUser(sessionUser);
-                  setCredits(sessionUser.credits);
               }
           } catch (error) {
               console.error("Erro ao restaurar sessão:", error);
@@ -106,18 +62,16 @@ const App: React.FC = () => {
       };
       initAuth();
 
-      if (isSupabaseConfigured()) {
+      if (isSupabaseConfigured() && supabase) {
           const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
               if (event === 'SIGNED_OUT') {
                   setUser(null);
-                  setCredits(0);
                   setCurrentView('login');
               } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
                    if (session?.user) {
                        const refreshedUser = await authService.getCurrentSession();
                        if (refreshedUser) {
                            setUser(refreshedUser);
-                           setCredits(refreshedUser.credits);
                        }
                    }
               }
@@ -129,7 +83,7 @@ const App: React.FC = () => {
   // Load History when user logs in
   useEffect(() => {
       const fetchHistory = async () => {
-          if (!user) {
+          if (!user || !isSupabaseConfigured() || !supabase) {
               setHistory([]);
               return;
           }
@@ -160,11 +114,6 @@ const App: React.FC = () => {
         return;
     }
 
-    if (credits <= 0) {
-        setShowUpgradeModal(true);
-        return;
-    }
-
     setIsLoading(true);
     setError(null);
     setGeneratedNews(null);
@@ -172,8 +121,6 @@ const App: React.FC = () => {
     try {
       const result = await generateNewsArticle(theme, topic, tone);
       setGeneratedNews(result);
-      
-      setCredits(prev => Math.max(0, prev - 1));
       setHistory(prev => [result, ...prev]);
 
     } catch (err) {
@@ -189,7 +136,6 @@ const App: React.FC = () => {
 
   const handleLoginSuccess = (u: User) => {
       setUser(u);
-      setCredits(u.credits);
       
       if (u.role === 'admin') {
           setCurrentView('admin-dashboard');
@@ -201,7 +147,6 @@ const App: React.FC = () => {
   const handleLogout = async () => {
       await authService.logout();
       setUser(null);
-      setCredits(0);
       setCurrentView('login');
   };
 
@@ -237,13 +182,8 @@ const App: React.FC = () => {
   if (currentView === 'user-dashboard' && user) {
       return <UserDashboard 
           user={user}
-          credits={credits}
           history={history}
           onBack={() => setCurrentView('app')}
-          onOpenPro={() => {
-            setCurrentView('app');
-            setShowUpgradeModal(true);
-          }}
           onOpenAdmin={() => {
               if (user.role === 'admin') setCurrentView('admin-dashboard');
           }}
@@ -254,12 +194,6 @@ const App: React.FC = () => {
       return <AdminDashboard 
           onBack={() => setCurrentView('app')}
           onOpenDocs={() => setCurrentView('admin-docs')}
-          currentUserCredits={credits}
-          onUpdateUserCredits={setCredits}
-          plans={plans}
-          onUpdatePlans={setPlans}
-          appConfig={appConfig}
-          onUpdateAppConfig={setAppConfig}
       />;
   }
 
@@ -267,8 +201,6 @@ const App: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-black text-gray-300 font-sans selection:bg-green-900 selection:text-green-100">
       
       <Header 
-        credits={credits} 
-        onOpenPro={() => setShowUpgradeModal(true)}
         onOpenDocs={() => setCurrentView('docs')}
         onOpenProfile={() => user ? setCurrentView('user-dashboard') : setCurrentView('login')}
         appConfig={appConfig}
@@ -276,26 +208,6 @@ const App: React.FC = () => {
 
       <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-8 md:py-12 flex flex-col gap-8">
         
-        {/* Intro Section */}
-        <div className="text-center space-y-4 animate-fade-in-down">
-          <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-white">
-            Notícias com <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-600">IA & SEO</span>
-          </h2>
-          <p className="text-lg md:text-xl text-gray-500 max-w-2xl mx-auto">
-            Gere artigos otimizados para Rank Math e Yoast em segundos. Escolha o tema, o tom e deixe a inteligência artificial trabalhar.
-          </p>
-          {!user && (
-             <div className="flex justify-center gap-4 pt-2">
-                <button onClick={() => setCurrentView('login')} className="text-sm font-bold text-green-400 border border-green-900/50 px-4 py-2 rounded-full hover:bg-green-900/20 transition">
-                   Login
-                </button>
-                <button onClick={() => setCurrentView('register')} className="text-sm font-bold text-white bg-green-900/20 border border-green-900/50 px-4 py-2 rounded-full hover:bg-green-900/40 transition">
-                   Cadastrar
-                </button>
-             </div>
-          )}
-        </div>
-
         {/* Main Form */}
         <div className="bg-gray-900/20 backdrop-blur-sm border border-green-900/30 rounded-2xl p-6 md:p-8 shadow-2xl shadow-green-900/10">
           <NewsGeneratorForm
@@ -307,10 +219,6 @@ const App: React.FC = () => {
             setTone={setTone}
             onSubmit={handleGenerate}
             isLoading={isLoading}
-            credits={credits}
-            onOpenPro={() => setShowUpgradeModal(true)}
-            onLoginRequired={() => setCurrentView('login')}
-            isLoggedIn={!!user}
           />
         </div>
 
@@ -389,38 +297,6 @@ const App: React.FC = () => {
         )}
 
       </main>
-
-      <UpgradeModal 
-        isOpen={showUpgradeModal}
-        onClose={() => setShowUpgradeModal(false)}
-        onUpgrade={(planId) => {
-            const plan = plans.find(p => p.id === planId);
-            if (plan) {
-                setCheckoutPlan(plan);
-                setShowUpgradeModal(false);
-                setShowCheckoutModal(true);
-            } else if (planId === 'single') {
-                 setCheckoutPlan({ id: 'single', name: 'Crédito Avulso', price: 5.00, credits: 1, recurrence: 'Pagamento Único', features: [], active: true });
-                 setShowUpgradeModal(false);
-                 setShowCheckoutModal(true);
-            }
-        }}
-        plans={plans}
-        appConfig={appConfig}
-      />
-
-      <CheckoutModal 
-         isOpen={showCheckoutModal}
-         onClose={() => setShowCheckoutModal(false)}
-         plan={checkoutPlan}
-         onConfirm={() => {
-             setShowCheckoutModal(false);
-             if (checkoutPlan) {
-                 setCredits(prev => prev + checkoutPlan.credits);
-                 alert(`Pagamento confirmado! +${checkoutPlan.credits} créditos adicionados.`);
-             }
-         }}
-      />
 
       <footer className="border-t border-green-900/30 mt-12 bg-black py-8 text-center">
          <p className="text-gray-600 text-sm">
