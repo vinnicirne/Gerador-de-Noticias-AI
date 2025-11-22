@@ -1,5 +1,5 @@
 {
-  "name": "Gerador de Notícias",
-  "description": "Um aplicativo que gera notícias diárias sobre fatos recentes e cria análises preditivas sobre eventos futuros (esportes, política, economia).",
+  "name": "GDN_IA",
+  "description": "An AI-powered application that generates SEO-optimized news articles based on selected themes and custom prompts using the Gemini API. It provides a title, URL slug, meta description, and full article content ready for publishing.",
   "requestFramePermissions": []
 }

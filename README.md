@@ -1,27 +1,20 @@
-# Gerador de Notícias AI
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 
-Uma aplicação web moderna que utiliza Inteligência Artificial (Google Gemini) para gerar notícias, artigos e análises preditivas com foco em SEO.
+# Run and deploy your AI Studio app
 
-## 🚀 Deploy no Vercel
+This contains everything you need to run your app locally.
 
-Para conectar este repositório ao GitHub e realizar o deploy na Vercel:
+View your app in AI Studio: https://ai.studio/apps/drive/1-raTmF9bIoaF63SI9NoprxjMlf7bJhAT
 
-1. Faça o push deste código para um repositório no GitHub.
-2. Importe o projeto no painel da Vercel.
-3. Nas configurações de **Environment Variables** (Variáveis de Ambiente) do projeto na Vercel, adicione:
+## Run Locally
 
-| Variável | Descrição |
-|----------|-----------|
-| `API_KEY` | Sua chave de API do Google Gemini. |
-| `VITE_SUPABASE_URL` | (Opcional) URL do seu projeto Supabase. |
-| `VITE_SUPABASE_ANON_KEY` | (Opcional) Chave pública (Anon) do Supabase. |
+**Prerequisites:**  Node.js
 
-> **Nota:** As funcionalidades de backend (`backend/`) servem como referência para implementações server-side e requerem configuração adicional de servidor ou funções serverless se utilizadas.
 
-## 🛠 Stack
-
-- React 18
-- TypeScript
-- Tailwind CSS
-- Google Gemini API
-- Supabase (Opcional)
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`

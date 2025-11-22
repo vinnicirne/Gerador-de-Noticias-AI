@@ -1,91 +1,103 @@
 
-import React from 'react';
-import { NEWS_THEMES, NEWS_TONES } from '../constants';
+import React, { useState } from 'react';
+import type { NewsTheme } from '../types';
+import LoadingSpinner from './LoadingSpinner';
+import { NEWS_TONES } from '../constants';
+import CharacterCounter from './CharacterCounter';
 
 interface NewsGeneratorFormProps {
-  theme: string;
-  setTheme: (theme: string) => void;
-  topic: string;
-  setTopic: (topic: string) => void;
-  tone: string;
-  setTone: (tone: string) => void;
-  onSubmit: (e: React.FormEvent) => void;
+  themes: NewsTheme[];
   isLoading: boolean;
+  onSubmit: (themeId: string, customPrompt: string, tone: string) => void;
 }
 
-const NewsGeneratorForm: React.FC<NewsGeneratorFormProps> = ({
-  theme,
-  setTheme,
-  topic,
-  setTopic,
-  tone,
-  setTone,
-  onSubmit,
-  isLoading,
-}) => {
+const MAX_PROMPT_LENGTH = 500;
+
+const NewsGeneratorForm: React.FC<NewsGeneratorFormProps> = ({ themes, isLoading, onSubmit }) => {
+  const [selectedThemeId, setSelectedThemeId] = useState<string>(themes[0]?.id || '');
+  const [customPrompt, setCustomPrompt] = useState<string>('');
+  const [selectedTone, setSelectedTone] = useState<string>(NEWS_TONES[0]);
+
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedThemeId && !isLoading) {
+      onSubmit(selectedThemeId, customPrompt, selectedTone);
+    }
+  };
 
   return (
-    <div className="w-full max-w-2xl mx-auto space-y-6">
-      <form onSubmit={onSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="theme" className="block text-sm font-medium text-gray-400 mb-1">
-                Tema da Notícia
-              </label>
-              <select
-                id="theme"
-                value={theme}
-                onChange={(e) => setTheme(e.target.value)}
-                className="w-full bg-black border border-green-900/60 text-gray-200 rounded-md p-2.5 focus:ring-1 focus:ring-green-500 focus:border-green-500 transition disabled:opacity-50 outline-none"
-              >
-                {NEWS_THEMES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="tone" className="block text-sm font-medium text-gray-400 mb-1">
-                Tom de Voz
-              </label>
-              <select
-                id="tone"
-                value={tone}
-                onChange={(e) => setTone(e.target.value)}
-                className="w-full bg-black border border-green-900/60 text-green-100 rounded-md p-2.5 focus:ring-1 focus:ring-green-500 focus:border-green-500 transition disabled:opacity-50 outline-none"
-              >
-                {NEWS_TONES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
+    <div className="bg-gray-900/20 p-6 rounded-xl border border-[#136c0b]/30 shadow-[0_0_10px_rgba(27,138,15,0.4)] sticky top-0">
+      <h2 className="text-lg font-semibold text-[#1b8a0f] mb-4">Gerador de Notícias</h2>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div>
+          <label htmlFor="theme" className="block text-sm font-medium text-gray-500 mb-1">
+            Escolha um Tema
+          </label>
+          <select
+            id="theme"
+            name="theme"
+            value={selectedThemeId}
+            onChange={(e) => setSelectedThemeId(e.target.value)}
+            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-[#136c0b]/60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-[#1b8a0f] sm:text-sm rounded-md bg-black text-gray-300 transition-all duration-200"
+            disabled={isLoading}
+          >
+            {themes.filter(t => t.is_active).map((theme) => (
+              <option key={theme.id} value={theme.id} className="bg-black text-gray-300">
+                {theme.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div>
-          <label htmlFor="topic" className="block text-sm font-medium text-gray-400 mb-1">
-            Tópico Específico (Opcional)
+           <label htmlFor="tone" className="block text-sm font-medium text-gray-500 mb-1">
+            Tom da Notícia
           </label>
-          <input
-            id="topic"
-            type="text"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            placeholder="Ex: Lançamento do novo iPhone, final da Champions League..."
-            className="w-full bg-black border border-green-900/60 text-gray-200 rounded-md p-2.5 focus:ring-1 focus:ring-green-500 focus:border-green-500 transition disabled:opacity-50 outline-none placeholder-gray-700"
+          <select
+            id="tone"
+            name="tone"
+            value={selectedTone}
+            onChange={(e) => setSelectedTone(e.target.value)}
+            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-[#136c0b]/60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-[#1b8a0f] sm:text-sm rounded-md bg-black text-gray-300 transition-all duration-200"
+            disabled={isLoading}
+          >
+            {NEWS_TONES.map((tone) => (
+              <option key={tone} value={tone} className="bg-black text-gray-300">
+                {tone}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <div className="flex justify-between items-center">
+            <label htmlFor="custom_prompt" className="block text-sm font-medium text-gray-500 mb-1">
+              Prompt Customizado (Opcional)
+            </label>
+             <CharacterCounter count={customPrompt.length} maxLength={MAX_PROMPT_LENGTH} />
+          </div>
+          <textarea
+            id="custom_prompt"
+            name="custom_prompt"
+            rows={4}
+            value={customPrompt}
+            onChange={(e) => setCustomPrompt(e.target.value)}
+            maxLength={MAX_PROMPT_LENGTH}
+            className="mt-1 block w-full shadow-sm sm:text-sm border-[#136c0b]/60 rounded-md bg-black text-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-[#1b8a0f] transition-all duration-200"
+            placeholder="Ex: Foco em startups de IA no Brasil..."
+            disabled={isLoading}
           />
         </div>
-      </form>
 
-      <button
-        onClick={onSubmit}
-        disabled={isLoading}
-        className="w-full bg-green-600 text-black font-bold py-3 px-4 rounded-md hover:bg-green-500 disabled:bg-gray-800 disabled:text-gray-500 disabled:border-gray-700 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(22,163,74,0.3)] border border-green-500"
-      >
-        {isLoading ? 'Processando Dados...' : 'Inicializar Geração'}
-      </button>
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#1b8a0f] hover:bg-[#24a813] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-[#1b8a0f] disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
+        >
+          {isLoading ? <LoadingSpinner className="h-5 w-5 -ml-1 mr-3 text-white" /> : 'Gerar Notícia'}
+        </button>
+      </form>
     </div>
   );
 };
