@@ -1,8 +1,9 @@
-
+// FIX: Import missing types
 import { PaymentConfig, PaymentTransaction, CreditPackage, PaymentPlatform, MercadoPagoPreference, MercadoPagoResponse } from '../types';
 import { creditService } from './creditService';
 import { notificationService } from './notificationService';
 import { userService } from './userService';
+// FIX: Import CREDIT_PACKAGES for fallback
 import { CREDIT_PACKAGES } from '../constants';
 
 const CONFIG_STORAGE_KEY = 'gdn_payment_config';

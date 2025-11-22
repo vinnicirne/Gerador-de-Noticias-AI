@@ -28,11 +28,11 @@ class AIModelService {
     
     /**
      * Define o modelo preferido do usuário.
-     * @param modelId O `modelId` (ex: "gemini-1.5-pro") a ser salvo.
+     * @param modelId O `modelId` (ex: "gemini-3-pro-preview") a ser salvo.
      */
     public setUserPreferredModel(modelId: string): void {
         const availableModels = this.getAvailableModels();
-        // We can receive either the unique ID ('mod_gem_pro') or the modelId ('gemini-1.5-pro')
+        // We can receive either the unique ID ('mod_gem_pro') or the modelId ('gemini-3-pro-preview')
         const model = availableModels.find(m => m.id === modelId || m.modelId === modelId);
         
         if (model) {

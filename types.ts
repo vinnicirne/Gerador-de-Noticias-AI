@@ -1,4 +1,5 @@
 
+
 export interface NewsTheme {
   id: string;
   name: string;
@@ -174,78 +175,15 @@ export interface UserProfile {
   email: string;
   userType: UserType;
   credits: number;
+  // credits property is now managed by plans
+  planTier: PlanTier; 
+  usageStats: {
+    creditsUsedThisMonth: number;
+    generationsToday: number;
+    lastResetDate: Date;
+  };
   isActive: boolean;
   preferredAiModel?: string;
-}
-
-export interface CreditPackage {
-  id: string;
-  name: string;
-  credits: number;
-  price: number;
-  isActive: boolean;
-  order: number;
-}
-
-export interface CreditHistoryItem {
-  id: string;
-  type: 'purchase' | 'usage' | 'bonus' | 'refund';
-  amount: number;
-  description: string;
-  date: Date;
-}
-
-export type PaymentPlatform = 'mercadopago' | 'stripe' | 'pix';
-export type PaymentStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
-
-export interface PaymentConfig {
-    platform: PaymentPlatform;
-    isActive: boolean;
-    publicKey: string;
-    accessToken: string;
-}
-
-export interface PaymentTransaction {
-    id: string;
-    paymentId: string;
-    user: string;
-    packageId: string;
-    amount: number;
-    credits: number;
-    status: PaymentStatus;
-    method: 'pix' | 'credit_card';
-    createdAt: string;
-    updatedAt: string;
-    preferenceId?: string; 
-    initPoint?: string; 
-}
-
-export interface MercadoPagoItem {
-    title: string;
-    quantity: number;
-    currency_id: string;
-    unit_price: number;
-}
-
-export interface MercadoPagoBackUrls {
-    success: string;
-    failure: string;
-    pending: string;
-}
-
-export interface MercadoPagoPreference {
-    items: MercadoPagoItem[];
-    payer: { email: string };
-    back_urls: MercadoPagoBackUrls;
-    auto_return: string;
-    external_reference: string;
-    notification_url: string;
-}
-
-export interface MercadoPagoResponse {
-    id: string;
-    init_point: string; 
-    sandbox_init_point: string;
 }
 
 export interface AdminUser {
@@ -253,20 +191,16 @@ export interface AdminUser {
   username: string;
   email: string;
   userType: 'admin' | 'subscriber' | 'trial';
-  credits: number;
+  credits: number; // Kept for admin display purposes, but logic will use plans
   isActive: boolean;
   dateJoined: string;
   lastLogin: string;
 }
 
-export interface BillingTransaction {
-  id: string;
-  user: string;
-  amount: number;
-  creditsPurchased: number;
-  status: 'paid' | 'pending' | 'failed';
-  paymentMethod: 'credit_card' | 'pix';
-  date: string;
+export interface AdminChartData {
+    dates: string[];
+    userRegistrations: number[];
+    newsGenerated: number[];
 }
 
 export interface ActivityLog {
@@ -276,12 +210,6 @@ export interface ActivityLog {
   details: string;
   ip: string;
   timestamp: string;
-}
-
-export interface AdminChartData {
-    dates: string[];
-    userRegistrations: number[];
-    newsGenerated: number[];
 }
 
 export interface AdminDashboardData {
@@ -329,7 +257,6 @@ export interface AIUsageLog {
     cost: number;
     timestamp: string;
 }
-// Adicionar ao final do arquivo types.ts existente
 
 // ============================================
 // SISTEMA DE PLANOS E GERENCIAMENTO
@@ -379,4 +306,85 @@ export interface PlanChangeResult {
   success: boolean;
   message: string;
   prorated?: number;
+}
+
+// ============================================
+// SISTEMA DE FINANCEIRO E ATIVIDADES
+// ============================================
+
+export interface BillingTransaction {
+  id: string;
+  user: string;
+  amount: number;
+  creditsPurchased: number;
+  status: 'paid' | 'pending' | 'failed';
+  paymentMethod: 'credit_card' | 'pix';
+  date: string;
+}
+
+export interface CreditHistoryItem {
+    id: string;
+    date: Date;
+    description: string;
+    type: 'purchase' | 'usage' | 'bonus';
+    amount: number;
+}
+
+export interface CreditPackage {
+    id: string;
+    name: string;
+    credits: number;
+    price: number;
+    isActive: boolean;
+    order: number;
+}
+
+export type PaymentPlatform = 'mercadopago' | 'stripe';
+
+export interface PaymentConfig {
+    platform: PaymentPlatform;
+    isActive: boolean;
+    publicKey: string;
+    accessToken: string;
+}
+
+export interface PaymentTransaction {
+    id: string;
+    paymentId: string;
+    user: string;
+    packageId: string;
+    amount: number;
+    credits: number;
+    status: 'pending' | 'approved' | 'rejected';
+    method: 'pix' | 'credit_card';
+    createdAt: string;
+    updatedAt: string;
+    preferenceId?: string;
+    initPoint?: string;
+}
+
+export interface MercadoPagoPreference {
+    items: {
+        title: string;
+        quantity: number;
+        currency_id: 'BRL';
+        unit_price: number;
+    }[];
+    payer: {
+        email: string;
+    };
+    back_urls: {
+        success: string;
+        failure: string;
+        pending: string;
+    };
+    auto_return: 'approved';
+    external_reference: string;
+    notification_url: string;
+}
+
+export interface MercadoPagoResponse {
+    id: string;
+    init_point: string;
+    sandbox_init_point: string;
 }

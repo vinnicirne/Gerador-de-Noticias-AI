@@ -1,4 +1,4 @@
-import type { NewsTheme, AIConfig, CreditPackage } from './types';
+import type { NewsTheme, AIConfig, PlanLimits, PlanTier, CreditPackage } from './types';
 
 const NEWS_THEMES_STRINGS: string[] = [
   'Esporte',
@@ -81,17 +81,85 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
   temperature: 0.7,
 };
 
-// --- CREDIT & BILLING SETTINGS ---
-export const CREDIT_SETTINGS = {
-    generation_cost: 1,
-    free_credits_on_signup: 10,
-};
+// ============================================
+// PACOTES DE CRÉDITO
+// ============================================
 
 export const CREDIT_PACKAGES: CreditPackage[] = [
-    { id: 'starter', name: 'Starter', credits: 50, price: 19.90, isActive: true, order: 1 },
-    { id: 'pro', name: 'Pro', credits: 100, price: 34.90, isActive: true, order: 2 },
-    { id: 'business', name: 'Business', credits: 200, price: 59.90, isActive: true, order: 3 },
+  { id: 'starter', name: 'Starter', credits: 100, price: 49.90, isActive: true, order: 1 },
+  { id: 'pro', name: 'Pro', credits: 500, price: 199.90, isActive: true, order: 2 },
+  { id: 'enterprise', name: 'Enterprise', credits: 2000, price: 699.90, isActive: true, order: 3 },
 ];
+
+// ============================================
+// CONFIGURAÇÃO DE PLANOS
+// ============================================
+
+export const PLAN_CONFIGS: Record<PlanTier, PlanLimits> = {
+  free: {
+    tier: 'free',
+    name: 'Free',
+    price: 0,
+    creditsPerMonth: 10,
+    isUnlimited: false,
+    features: {
+      basicModels: true,
+      allModels: false,
+      premiumModels: false,
+      historyDays: 7,
+      seoAdvanced: false,
+      apiAccess: false,
+      prioritySupport: false,
+      customBranding: false
+    },
+    restrictions: {
+      maxGenerationsPerDay: 3,
+      allowedModels: ['gemini-2.5-flash']
+    }
+  },
+  pro: {
+    tier: 'pro',
+    name: 'Pro',
+    price: 49.90,
+    creditsPerMonth: 100,
+    isUnlimited: false,
+    features: {
+      basicModels: true,
+      allModels: true,
+      premiumModels: false,
+      historyDays: 30,
+      seoAdvanced: true,
+      apiAccess: false,
+      prioritySupport: true,
+      customBranding: false
+    },
+    restrictions: {
+// FIX: Use 'gemini-3-pro-preview' instead of deprecated 'gemini-1.5-pro'
+      allowedModels: ['gemini-2.5-flash', 'gemini-3-pro-preview', 'gpt-4-turbo']
+    }
+  },
+  enterprise: {
+    tier: 'enterprise',
+    name: 'Enterprise',
+    price: 299.90,
+    creditsPerMonth: 999999,
+    isUnlimited: true,
+    features: {
+      basicModels: true,
+      allModels: true,
+      premiumModels: true,
+      historyDays: 999999,
+      seoAdvanced: true,
+      apiAccess: true,
+      prioritySupport: true,
+      customBranding: true
+    },
+    restrictions: {
+      allowedModels: ['*']
+    }
+  }
+};
+
 
 export const SYSTEM_STATUS = {
   "projeto": "GDN_IA - Gerador de Conteúdo com IA",
@@ -199,77 +267,6 @@ export const SYSTEM_STATUS = {
         "Logs financeiros detalhados para auditoria",
         "Relatórios de receita para admin"
       ]
-    }
-  }
-};
-// Adicionar ao final do arquivo constants.ts
-
-// ============================================
-// CONFIGURAÇÃO DE PLANOS
-// ============================================
-
-import { PlanLimits, PlanTier } from './types';
-
-export const PLAN_CONFIGS: Record<PlanTier, PlanLimits> = {
-  free: {
-    tier: 'free',
-    name: 'Free',
-    price: 0,
-    creditsPerMonth: 10,
-    isUnlimited: false,
-    features: {
-      basicModels: true,
-      allModels: false,
-      premiumModels: false,
-      historyDays: 7,
-      seoAdvanced: false,
-      apiAccess: false,
-      prioritySupport: false,
-      customBranding: false
-    },
-    restrictions: {
-      maxGenerationsPerDay: 3,
-      allowedModels: ['gemini-2.5-flash']
-    }
-  },
-  pro: {
-    tier: 'pro',
-    name: 'Pro',
-    price: 49.90,
-    creditsPerMonth: 100,
-    isUnlimited: false,
-    features: {
-      basicModels: true,
-      allModels: true,
-      premiumModels: false,
-      historyDays: 30,
-      seoAdvanced: true,
-      apiAccess: false,
-      prioritySupport: true,
-      customBranding: false
-    },
-    restrictions: {
-      allowedModels: ['gemini-2.5-flash', 'gemini-1.5-pro', 'gpt-4-turbo']
-    }
-  },
-  enterprise: {
-    tier: 'enterprise',
-    name: 'Enterprise',
-    price: 299.90,
-    creditsPerMonth: 999999,
-    isUnlimited: true,
-    features: {
-      basicModels: true,
-      allModels: true,
-      premiumModels: true,
-      historyDays: 999999,
-      seoAdvanced: true,
-      apiAccess: true,
-      prioritySupport: true,
-      customBranding: true
-    },
-    restrictions: {
-      allowedModels: ['*']
     }
   }
 };

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { planService } from '../services/planService';
 import { PlanMiddleware } from '../services/planMiddleware';
+import { userService } from '../services/userService';
 import { UserUsage, PlanTier } from '../types';
 
 export const usePlan = (userId: string) => {
@@ -16,16 +17,15 @@ export const usePlan = (userId: string) => {
   const loadUsage = async () => {
     try {
       setIsLoading(true);
-      // Em produção, buscar do backend
-      const mockUsage = planService.calculateUsage(
-        'free',
-        7,
-        2,
-        new Date(),
-        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      const user = userService.getUser();
+      const currentUsage = planService.calculateUsage(
+        user.planTier,
+        user.usageStats.creditsUsedThisMonth,
+        user.usageStats.generationsToday,
+        user.usageStats.lastResetDate,
+        new Date(user.usageStats.lastResetDate.getFullYear(), user.usageStats.lastResetDate.getMonth() + 1, user.usageStats.lastResetDate.getDate())
       );
-      mockUsage.userId = userId;
-      setUsage(mockUsage);
+      setUsage(currentUsage);
     } catch (err) {
       setError('Erro ao carregar dados de uso');
     } finally {
@@ -48,7 +48,11 @@ export const usePlan = (userId: string) => {
   const changePlan = async (newTier: PlanTier) => {
     if (!usage) return { success: false, message: 'Dados de uso não carregados' };
     
-    return await planService.changePlan(userId, newTier, usage.planTier);
+    const result = await planService.changePlan(userId, newTier, usage.planTier);
+    if (result.success && !planService['isDowngrade'](usage.planTier, newTier)) {
+        userService.changePlan(newTier);
+    }
+    return result;
   };
 
   return {

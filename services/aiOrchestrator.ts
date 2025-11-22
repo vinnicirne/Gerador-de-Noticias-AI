@@ -113,6 +113,7 @@ class AIOrchestrator {
 
     // --- IMPLEMENTAÇÕES DE GERAÇÃO (mantidas como antes) ---
     private async generateGemini(apiKey: string, model: string, prompt: string, config: AIConfig): Promise<string> {
+        // FIX: Use new GoogleGenAI({ apiKey }) instead of new GoogleGenAI(apiKey)
         const ai = new GoogleGenAI({ apiKey });
         const response = await ai.models.generateContent({ model, contents: prompt, config: { temperature: config.temperature } });
         if (!response.text) throw new Error("Resposta vazia do Gemini.");

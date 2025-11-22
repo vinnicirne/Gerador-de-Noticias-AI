@@ -1,4 +1,5 @@
 
+
 import { AdminUser, BillingTransaction, ActivityLog, AdminDashboardData, AdminChartData, AIPlatform, AIModel, AIUsageLog } from '../types';
 import { userService } from './userService';
 
@@ -63,7 +64,8 @@ class AdminService {
 
         this.aiModels = [
             { id: 'mod_gem_flash', platformId: 'plat_gemini', name: 'Gemini 2.5 Flash', modelId: 'gemini-2.5-flash', isActive: true, contextLength: 32000, supportsVision: true, supportsAudio: false },
-            { id: 'mod_gem_pro', platformId: 'plat_gemini', name: 'Gemini 1.5 Pro', modelId: 'gemini-1.5-pro', isActive: false, contextLength: 1000000, supportsVision: true, supportsAudio: true },
+// FIX: Use 'gemini-3-pro-preview' instead of deprecated 'gemini-1.5-pro'
+            { id: 'mod_gem_pro', platformId: 'plat_gemini', name: 'Gemini 1.5 Pro', modelId: 'gemini-3-pro-preview', isActive: false, contextLength: 1000000, supportsVision: true, supportsAudio: true },
             { id: 'mod_gpt4', platformId: 'plat_openai', name: 'GPT-4 Turbo', modelId: 'gpt-4-turbo', isActive: false, contextLength: 128000, supportsVision: true, supportsAudio: false },
             { id: 'mod_claude', platformId: 'plat_claude', name: 'Claude 3.5 Sonnet', modelId: 'claude-3-5-sonnet-20240620', isActive: false, contextLength: 200000, supportsVision: true, supportsAudio: false },
         ];

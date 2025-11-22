@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import Sidebar from './components/Sidebar';
 import NewsGenerator from './features/NewsGenerator';
@@ -9,10 +8,10 @@ import CanvaGenerator from './features/CanvaGenerator';
 import ApiIntegrations from './features/ApiIntegrations';
 import IntegrationsDashboard from './features/IntegrationsDashboard';
 import AdminPanel from './features/AdminPanel';
-import CreditPurchase from './features/CreditPurchase';
+import BillingPage from './features/BillingPage'; // NOVO
 import NotificationToast from './components/NotificationToast';
 import PermissionGate from './components/PermissionGate';
-import GenerationHistory from './features/GenerationHistory'; // NOVO
+import GenerationHistory from './features/GenerationHistory';
 
 const App: React.FC = () => {
   const [activeTool, setActiveTool] = useState('news');
@@ -29,19 +28,16 @@ const App: React.FC = () => {
         return <CanvaGenerator />;
       case 'prompts':
         return <PromptGenerator />;
-      case 'history': // NOVA ROTA
+      case 'history':
         return <GenerationHistory />;
       case 'api-integrations':
         return <ApiIntegrations />;
       case 'integrations':
         return <IntegrationsDashboard />;
-      case 'credits':
-        return <CreditPurchase />;
+      case 'billing': // NOVA ROTA UNIFICADA
+        return <BillingPage />;
       case 'admin':
-        return
-	  case 'billing':
-		return <BillingPage />;
-		(
+        return (
             <PermissionGate 
                 requiredRole="admin" 
                 onAccessDenied={() => setActiveTool('news')}

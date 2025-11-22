@@ -1,21 +1,19 @@
-
 import React, { useState, useCallback } from 'react';
 import type { GeneratedNews, AIModel } from '../types';
 import { generateNewsArticle } from '../services/geminiService';
 import { appCache } from '../services/cacheService';
-import { creditService } from '../services/creditService';
 import { userService } from '../services/userService';
-import { historyService } from '../services/historyService'; // NOVO
-import { CREDIT_SETTINGS } from '../constants';
+import { historyService } from '../services/historyService';
+import { PlanMiddleware } from '../services/planMiddleware'; // NOVO
 import NewsGeneratorForm from '../components/NewsGeneratorForm';
 import GeneratedNewsDisplay from '../components/GeneratedNewsDisplay';
 import { MOCK_THEMES } from '../constants';
-import { adminService } from '../services/adminService';
 
 const NewsGenerator: React.FC = () => {
   const [generatedNews, setGeneratedNews] = useState<GeneratedNews | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const user = userService.getUser();
 
   const handleGenerateNews = useCallback(async (themeId: string, customPrompt: string, tone: string, model: AIModel | null) => {
     setError(null);
@@ -24,9 +22,11 @@ const NewsGenerator: React.FC = () => {
         setError('Nenhum modelo de IA foi selecionado ou está ativo.');
         return;
     }
-
-    if (!userService.hasCredits(CREDIT_SETTINGS.generation_cost)) {
-        setError(`Saldo insuficiente. A geração custa ${CREDIT_SETTINGS.generation_cost} crédito.`);
+    
+    // VERIFICAÇÃO DE PLANO (Middleware)
+    const check = await PlanMiddleware.canGenerate(user.id, model.modelId);
+    if (!check.allowed) {
+        setError(check.reason);
         return;
     }
 
@@ -54,23 +54,19 @@ const NewsGenerator: React.FC = () => {
     try {
       const newsData = await generateNewsArticle(theme, customPrompt, tone, aiConfig);
       
-      const success = creditService.deductCredits(CREDIT_SETTINGS.generation_cost, `Notícia (${theme.name}) com ${aiConfig.modelName}`);
+      userService.recordGeneration(); // Registra o uso
       
-      if (success) {
-          appCache.set('news', cacheParams, newsData);
-          setGeneratedNews(newsData);
-          // Log no histórico usando o novo serviço
-          historyService.add({
-              generationType: 'news',
-              aiModel: model.name,
-              promptSummary: `${theme.name} - ${customPrompt.substring(0, 30)}...`,
-              inputs: { theme: theme.name, tone, customPrompt },
-              result: newsData,
-              creditsUsed: CREDIT_SETTINGS.generation_cost
-          });
-      } else {
-          setError('Falha ao processar créditos.');
-      }
+      appCache.set('news', cacheParams, newsData);
+      setGeneratedNews(newsData);
+      
+      historyService.add({
+          generationType: 'news',
+          aiModel: model.name,
+          promptSummary: `${theme.name} - ${customPrompt.substring(0, 30)}...`,
+          inputs: { theme: theme.name, tone, customPrompt },
+          result: newsData,
+          creditsUsed: 1 // Custo padrão
+      });
 
     } catch (e) {
       console.error(e);
@@ -78,7 +74,7 @@ const NewsGenerator: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [user.id]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">

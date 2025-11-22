@@ -1,12 +1,10 @@
-
 import React, { useState, useCallback } from 'react';
 import type { GeneratedCopy, AIModel } from '../types';
 import { generateMarketingCopy } from '../services/geminiService';
 import { appCache } from '../services/cacheService';
-import { creditService } from '../services/creditService';
 import { userService } from '../services/userService';
-import { historyService } from '../services/historyService'; // NOVO
-import { CREDIT_SETTINGS } from '../constants';
+import { historyService } from '../services/historyService';
+import { PlanMiddleware } from '../services/planMiddleware'; // NOVO
 import CopyGeneratorForm from '../components/CopyGeneratorForm';
 import CopyGeneratorDisplay from '../components/CopyGeneratorDisplay';
 
@@ -14,6 +12,7 @@ const CopyGenerator: React.FC = () => {
   const [generatedCopy, setGeneratedCopy] = useState<GeneratedCopy | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const user = userService.getUser();
 
   const handleGenerate = useCallback(async (copyType: { id: string, name: string }, productName: string, targetAudience: string, message: string, model: AIModel | null) => {
     setError(null);
@@ -23,8 +22,9 @@ const CopyGenerator: React.FC = () => {
         return;
     }
 
-    if (!userService.hasCredits(CREDIT_SETTINGS.generation_cost)) {
-        setError(`Saldo insuficiente. Custo: ${CREDIT_SETTINGS.generation_cost} crédito.`);
+    const check = await PlanMiddleware.canGenerate(user.id, model.modelId);
+    if (!check.allowed) {
+        setError(check.reason);
         return;
     }
 
@@ -45,29 +45,26 @@ const CopyGenerator: React.FC = () => {
     try {
       const copyData = await generateMarketingCopy(copyType, productName, targetAudience, message, aiConfig);
       
-      const success = creditService.deductCredits(CREDIT_SETTINGS.generation_cost, `Copy (${copyType.name}) com ${aiConfig.modelName}`);
+      userService.recordGeneration();
       
-      if (success) {
-          appCache.set('copy', cacheParams, copyData);
-          setGeneratedCopy(copyData);
-          historyService.add({
-              generationType: 'copy',
-              aiModel: model.name,
-              promptSummary: `${copyType.name} para "${productName}"`,
-              inputs: { copyType: copyType.name, productName, targetAudience, message },
-              result: copyData,
-              creditsUsed: CREDIT_SETTINGS.generation_cost
-          });
-      } else {
-          setError('Erro ao debitar créditos.');
-      }
+      appCache.set('copy', cacheParams, copyData);
+      setGeneratedCopy(copyData);
+      historyService.add({
+          generationType: 'copy',
+          aiModel: model.name,
+          promptSummary: `${copyType.name} para "${productName}"`,
+          inputs: { copyType: copyType.name, productName, targetAudience, message },
+          result: copyData,
+          creditsUsed: 1
+      });
+      
     } catch (e) {
       console.error(e);
       setError(e instanceof Error ? `An error occurred: ${e.message}` : 'An unknown error occurred during copy generation.');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [user.id]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">

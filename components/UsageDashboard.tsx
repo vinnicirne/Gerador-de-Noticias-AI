@@ -2,35 +2,19 @@
 import React, { useState, useEffect } from 'react';
 import { planService } from '../services/planService';
 import { userService } from '../services/userService';
-import { UserUsage, PlanLimits } from '../types';
+import { UserUsage, PlanLimits, PlanTier } from '../types';
+import { usePlan } from '../hooks/usePlan';
 
-const UsageDashboard: React.FC = () => {
-  const [usage, setUsage] = useState<UserUsage | null>(null);
-  const [plan, setPlan] = useState<PlanLimits | null>(null);
+interface UsageDashboardProps {
+    onUpgradeClick: () => void;
+}
 
-  useEffect(() => {
-    loadUsageData();
-  }, []);
+const UsageDashboard: React.FC<UsageDashboardProps> = ({ onUpgradeClick }) => {
+  const { usage, isLoading } = usePlan(userService.getUser().id);
 
-  const loadUsageData = () => {
-    const user = userService.getUser();
-    
-    // Mock - em produção, buscar do backend
-    const mockUsage = planService.calculateUsage(
-      'free',
-      7,
-      2,
-      new Date(),
-      new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-    );
-    mockUsage.userId = user.id;
-    
-    setUsage(mockUsage);
-    setPlan(planService.getPlan('free'));
-  };
-
-  if (!usage || !plan) return <div>Carregando...</div>;
-
+  if (isLoading || !usage) return <div>Carregando...</div>;
+  
+  const plan = planService.getPlan(usage.planTier);
   const usagePercentage = plan.isUnlimited ? 0 : (usage.creditsUsed / plan.creditsPerMonth) * 100;
 
   return (
@@ -45,7 +29,7 @@ const UsageDashboard: React.FC = () => {
             </p>
           </div>
           <button 
-            onClick={() => window.location.href = '/upgrade'}
+            onClick={onUpgradeClick}
             className="px-4 py-2 bg-[#1b8a0f] text-white rounded-lg hover:bg-[#24a813] transition-colors text-sm font-medium"
           >
             Fazer Upgrade

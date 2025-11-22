@@ -1,5 +1,4 @@
-
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { userService } from '../services/userService';
 import { UserProfile } from '../types';
 
@@ -14,18 +13,14 @@ const tools = [
   { id: 'copy', name: 'Gerador de Copy', icon: 'm16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10' },
   { id: 'canva', name: 'Estrutura para Canva', icon: 'M2.25 15.75l5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z' },
   { id: 'prompts', name: 'Gerador de Prompts', icon: 'M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z' },
-  { id: 'history', name: 'Histórico de Gerações', icon: 'M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z' }, // NOVO
+  { id: 'history', name: 'Histórico de Gerações', icon: 'M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z' },
+  { id: 'billing', name: 'Gerenciar Plano', icon: 'M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h6m3-3.75l-3.75-3.75M17.25 19.5l-3.75-3.75' },
   { id: 'api-integrations', name: 'API & Desenvolvedores', icon: 'M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5' },
   { id: 'integrations', name: 'Configurações & Integrações', icon: 'M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 0 1-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11-.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.107-1.204l-.527-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894Z' },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ activeTool, setActiveTool }) => {
-  const [user, setUser] = useState<UserProfile>(userService.getUser());
-
-  useEffect(() => {
-    // Subscreve para atualizações do usuário (créditos)
-    return userService.subscribe(setUser);
-  }, []);
+  const user = userService.getUser();
 
   return (
     <aside className="w-64 flex flex-col bg-black border-r border-[#136c0b]/30 hidden sm:flex">
@@ -38,22 +33,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTool, setActiveTool }) => {
             </h1>
         </div>
         
-        {/* User Credit Badge */}
-        <div className="px-4 pt-4">
-            <button 
-                onClick={() => setActiveTool('credits')}
-                className="w-full bg-gray-900/50 border border-[#136c0b]/30 rounded-lg p-3 flex justify-between items-center hover:bg-gray-900 transition-colors group"
-            >
-                <div className="flex flex-col items-start">
-                    <span className="text-xs text-gray-500">Seus Créditos</span>
-                    <span className="text-lg font-bold text-[#1b8a0f] group-hover:text-white transition-colors">{user.credits}</span>
-                </div>
-                <div className="h-8 w-8 rounded-full bg-[#1b8a0f]/20 flex items-center justify-center text-[#1b8a0f]">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-                </div>
-            </button>
-        </div>
-
       <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
         {tools.map((tool) => (
           <button
@@ -72,7 +51,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTool, setActiveTool }) => {
           </button>
         ))}
 
-        {/* Admin Link - Protected */}
         {userService.isAdmin() && (
              <button
                 onClick={() => setActiveTool('admin')}
@@ -91,6 +69,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTool, setActiveTool }) => {
       </nav>
       <div className="p-4 border-t border-gray-900 text-center text-xs text-gray-500">
         <p className="truncate">{user.email}</p>
+        <p className="font-bold capitalize">{user.planTier} Plan</p>
       </div>
     </aside>
   );

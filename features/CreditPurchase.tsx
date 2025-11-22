@@ -1,24 +1,26 @@
-
 import React, { useState, useEffect } from 'react';
 import { userService } from '../services/userService';
-import { CREDIT_PACKAGES } from '../constants';
+import { paymentService } from '../services/paymentService'; // Importar
 import { UserProfile, CreditHistoryItem, CreditPackage } from '../types';
 import CheckoutModal from '../components/CheckoutModal';
 
 const CreditPurchase: React.FC = () => {
     const [user, setUser] = useState<UserProfile>(userService.getUser());
     const [history, setHistory] = useState<CreditHistoryItem[]>([]);
+    const [packages, setPackages] = useState<CreditPackage[]>([]); // Novo
     const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     useEffect(() => {
         const unsubscribe = userService.subscribe(setUser);
         setHistory(userService.getHistory());
+        setPackages(paymentService.getCreditPackages()); // Carregar pacotes
         return unsubscribe;
     }, []);
 
     useEffect(() => {
         setHistory(userService.getHistory());
+        setPackages(paymentService.getCreditPackages()); // Atualizar pacotes se mudarem no admin
     }, [user]);
 
     const handlePurchaseClick = (pkg: CreditPackage) => {
@@ -51,7 +53,7 @@ const CreditPurchase: React.FC = () => {
 
              {/* Packages */}
              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {CREDIT_PACKAGES.map((pkg) => (
+                {packages.filter(p => p.isActive).map((pkg) => (
                     <div key={pkg.id} className="bg-gray-900/40 border border-gray-800 rounded-xl p-6 hover:border-[#1b8a0f]/50 transition-colors relative overflow-hidden group">
                         <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24 text-white" viewBox="0 0 20 20" fill="currentColor">
@@ -60,7 +62,7 @@ const CreditPurchase: React.FC = () => {
                             </svg>
                         </div>
                         
-                        <h3 className="text-lg font-bold text-white capitalize">{pkg.id} Pack</h3>
+                        <h3 className="text-lg font-bold text-white capitalize">{pkg.name}</h3>
                         <div className="my-4">
                             <span className="text-3xl font-bold text-[#1b8a0f]">{pkg.credits}</span>
                             <span className="text-gray-400 ml-2">créditos</span>

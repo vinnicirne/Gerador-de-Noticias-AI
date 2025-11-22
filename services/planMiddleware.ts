@@ -10,7 +10,6 @@ export class PlanMiddleware {
    */
   static async canGenerate(userId: string, modelId: string): Promise<{ allowed: boolean; reason?: string }> {
     
-    const user = userService.getUser();
     const usage = await this.getUserUsage(userId);
 
     // Verifica créditos
@@ -61,19 +60,13 @@ export class PlanMiddleware {
    */
   private static async getUserUsage(userId: string): Promise<UserUsage> {
     const user = userService.getUser();
-    const planTier = this.mapUserTypeToPlan(user.userType);
     
     return planService.calculateUsage(
-      planTier,
-      5, // creditsUsed (mock - substituir por dado real)
-      2, // generationsToday (mock)
-      new Date(2024, 0, 1),
-      new Date(2024, 0, 31)
+      user.planTier,
+      user.usageStats.creditsUsedThisMonth,
+      user.usageStats.generationsToday,
+      user.usageStats.lastResetDate,
+      new Date(user.usageStats.lastResetDate.getTime() + 30 * 24 * 60 * 60 * 1000)
     );
-  }
-
-  private static mapUserTypeToPlan(userType: string): PlanTier {
-    if (userType === 'admin') return 'enterprise';
-    return 'free';
   }
 }

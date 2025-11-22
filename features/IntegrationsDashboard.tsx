@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { integrationService } from '../services/integrationService';
 import { aiModelService } from '../services/aiModelService';
@@ -28,7 +29,7 @@ const IntegrationsDashboard: React.FC = () => {
     }
   }, [activeTab]);
 
-  const handleSave = (section: keyof IntegrationConfig, data: any) => {
+  const handleSave = (section: 'wordpress' | 'googleAnalytics' | 'searchConsole', data: any) => {
     setIsLoading(true);
     const newConfig = { ...config, [section]: { ...data, connected: true } };
     
@@ -45,8 +46,9 @@ const IntegrationsDashboard: React.FC = () => {
     // but updating local state is still good practice for UI responsiveness.
   };
 
-  const handleDisconnect = (section: keyof IntegrationConfig) => {
-    const newConfig = { ...config, [section]: { ...config[section], connected: false } };
+  const handleDisconnect = (section: 'wordpress' | 'googleAnalytics' | 'searchConsole') => {
+    // FIX: Add fallback for potentially undefined config section and restrict section type
+    const newConfig = { ...config, [section]: { ...(config[section] || {}), connected: false } };
     integrationService.saveConfig(newConfig);
     setConfig(newConfig);
   };

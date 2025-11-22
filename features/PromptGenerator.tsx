@@ -1,12 +1,10 @@
-
 import React, { useState, useCallback } from 'react';
 import type { GeneratedPrompt, AIModel } from '../types';
 import { generateAdvancedPrompt } from '../services/geminiService';
 import { appCache } from '../services/cacheService';
-import { creditService } from '../services/creditService';
 import { userService } from '../services/userService';
-import { historyService } from '../services/historyService'; // NOVO
-import { CREDIT_SETTINGS } from '../constants';
+import { historyService } from '../services/historyService';
+import { PlanMiddleware } from '../services/planMiddleware'; // NOVO
 import PromptGeneratorForm from '../components/PromptGeneratorForm';
 import PromptGeneratorDisplay from '../components/PromptGeneratorDisplay';
 
@@ -14,6 +12,7 @@ const PromptGenerator: React.FC = () => {
   const [generatedPrompt, setGeneratedPrompt] = useState<GeneratedPrompt | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const user = userService.getUser();
 
   const handleGenerate = useCallback(async (platform: string, category: string, description: string, style: string, model: AIModel | null) => {
     setError(null);
@@ -23,8 +22,9 @@ const PromptGenerator: React.FC = () => {
         return;
     }
 
-    if (!userService.hasCredits(CREDIT_SETTINGS.generation_cost)) {
-        setError(`Saldo insuficiente. Custo: ${CREDIT_SETTINGS.generation_cost} crédito.`);
+    const check = await PlanMiddleware.canGenerate(user.id, model.modelId);
+    if (!check.allowed) {
+        setError(check.reason);
         return;
     }
 
@@ -45,29 +45,26 @@ const PromptGenerator: React.FC = () => {
     try {
       const promptData = await generateAdvancedPrompt(platform, category, description, style, aiConfig);
       
-      const success = creditService.deductCredits(CREDIT_SETTINGS.generation_cost, `Prompt (${category}) com ${aiConfig.modelName}`);
+      userService.recordGeneration();
 
-      if (success) {
-          appCache.set('prompt', cacheParams, promptData);
-          setGeneratedPrompt(promptData);
-           historyService.add({
-              generationType: 'prompt',
-              aiModel: model.name,
-              promptSummary: `${platform} - ${category}`,
-              inputs: { platform, category, description, style },
-              result: promptData,
-              creditsUsed: CREDIT_SETTINGS.generation_cost
-          });
-      } else {
-          setError('Erro no débito de créditos.');
-      }
+      appCache.set('prompt', cacheParams, promptData);
+      setGeneratedPrompt(promptData);
+       historyService.add({
+          generationType: 'prompt',
+          aiModel: model.name,
+          promptSummary: `${platform} - ${category}`,
+          inputs: { platform, category, description, style },
+          result: promptData,
+          creditsUsed: 1
+      });
+      
     } catch (e) {
       console.error(e);
       setError(e instanceof Error ? `An error occurred: ${e.message}` : 'An unknown error occurred during prompt generation.');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [user.id]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">

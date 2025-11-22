@@ -1,4 +1,5 @@
 
+
 import { aiOrchestrator } from './aiOrchestrator';
 import type { NewsTheme, AIConfig, GeneratedNews, LandingPageData, RankMathSEOData, GeneratedCopy, GeneratedPrompt, GeneratedCanvaStructure, ContentValidationMetrics, VisualAssets } from '../types';
 
@@ -132,7 +133,7 @@ const validateContentWithAI = async (content: string, context: string, aiConfig:
 
     try {
         // Uses orchestrator to validate (Force fast Gemini model for validation to save costs/time)
-        // Note: Hardcoding gemini-2.5-flash here ensures validation is always fast regardless of the main generation model
+        // FIX: Hardcoding gemini-2.5-flash here ensures validation is always fast regardless of the main generation model
         const responseText = await aiOrchestrator.generateContent(
             'gemini-2.5-flash', 
             validationPrompt,
