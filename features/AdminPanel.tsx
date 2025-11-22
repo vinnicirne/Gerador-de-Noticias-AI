@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { adminService } from '../services/adminService';
 import { AdminDashboardData, AdminUser, BillingTransaction, AdminChartData } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import PaymentSettings from '../components/PaymentSettings';
 import AIPlatformSettings from '../components/AIPlatformSettings';
+import { SYSTEM_STATUS } from '../constants';
 
 type AdminTab = 'dashboard' | 'users' | 'billing' | 'activity' | 'finance_settings' | 'multi_ai';
 
@@ -79,6 +79,16 @@ const AdminPanel: React.FC = () => {
             Guia do Sistema & Status
         </h3>
 
+        <div className="mb-6 bg-[#1b8a0f]/10 border border-[#1b8a0f]/30 rounded-lg p-3 flex items-center justify-between">
+            <div>
+                <p className="text-xs text-[#1b8a0f] font-bold uppercase tracking-wider">Versão Atual</p>
+                <p className="text-white font-mono font-bold">{SYSTEM_STATUS.versao}</p>
+            </div>
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#1b8a0f] text-white">
+                PRODUÇÃO
+            </span>
+        </div>
+
         <div className="space-y-6">
             {/* Como Usar */}
             <div>
@@ -131,7 +141,13 @@ const AdminPanel: React.FC = () => {
 
   const renderDashboard = () => (
     <div className="space-y-8 animate-fade-in">
-        <h1 className="text-2xl font-bold text-white mb-6">Dashboard do Sistema</h1>
+        <div className="flex justify-between items-end">
+            <div>
+                <h1 className="text-2xl font-bold text-white">Dashboard do Sistema</h1>
+                <p className="text-gray-400 text-sm mt-1">Visão geral da operação v{SYSTEM_STATUS.versao}</p>
+            </div>
+            <span className="text-xs text-gray-500 font-mono">Build: {new Date().toLocaleDateString()}</span>
+        </div>
 
         {/* Stats Grid - Ordem Exata do Template Solicitado */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
