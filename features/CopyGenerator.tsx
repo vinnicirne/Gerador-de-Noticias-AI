@@ -1,10 +1,11 @@
+
 import React, { useState, useCallback } from 'react';
-import type { GeneratedCopy } from '../types';
+import type { GeneratedCopy, AIModel } from '../types';
 import { generateMarketingCopy } from '../services/geminiService';
 import { appCache } from '../services/cacheService';
 import { creditService } from '../services/creditService';
 import { userService } from '../services/userService';
-import { adminService } from '../services/adminService';
+import { historyService } from '../services/historyService'; // NOVO
 import { CREDIT_SETTINGS } from '../constants';
 import CopyGeneratorForm from '../components/CopyGeneratorForm';
 import CopyGeneratorDisplay from '../components/CopyGeneratorDisplay';
@@ -14,8 +15,13 @@ const CopyGenerator: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleGenerate = useCallback(async (copyType: { id: string, name: string }, productName: string, targetAudience: string, message: string) => {
+  const handleGenerate = useCallback(async (copyType: { id: string, name: string }, productName: string, targetAudience: string, message: string, model: AIModel | null) => {
     setError(null);
+    
+    if (!model) {
+        setError('Nenhum modelo de IA foi selecionado ou está ativo.');
+        return;
+    }
 
     if (!userService.hasCredits(CREDIT_SETTINGS.generation_cost)) {
         setError(`Saldo insuficiente. Custo: ${CREDIT_SETTINGS.generation_cost} crédito.`);
@@ -25,8 +31,7 @@ const CopyGenerator: React.FC = () => {
     setIsLoading(true);
     setGeneratedCopy(null);
 
-    const activeAI = adminService.getActiveGenerationModel();
-    const aiConfig = { modelName: activeAI.modelId, temperature: activeAI.temperature };
+    const aiConfig = { modelName: model.modelId, temperature: 0.7 };
 
     const cacheParams = { copyTypeId: copyType.id, productName, targetAudience, message, model: aiConfig.modelName };
     const cachedResult = appCache.get<GeneratedCopy>('copy', cacheParams);
@@ -45,6 +50,14 @@ const CopyGenerator: React.FC = () => {
       if (success) {
           appCache.set('copy', cacheParams, copyData);
           setGeneratedCopy(copyData);
+          historyService.add({
+              generationType: 'copy',
+              aiModel: model.name,
+              promptSummary: `${copyType.name} para "${productName}"`,
+              inputs: { copyType: copyType.name, productName, targetAudience, message },
+              result: copyData,
+              creditsUsed: CREDIT_SETTINGS.generation_cost
+          });
       } else {
           setError('Erro ao debitar créditos.');
       }

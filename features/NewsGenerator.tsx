@@ -1,22 +1,29 @@
+
 import React, { useState, useCallback } from 'react';
-import type { GeneratedNews } from '../types';
+import type { GeneratedNews, AIModel } from '../types';
 import { generateNewsArticle } from '../services/geminiService';
 import { appCache } from '../services/cacheService';
 import { creditService } from '../services/creditService';
 import { userService } from '../services/userService';
-import { adminService } from '../services/adminService'; // Importa adminService
+import { historyService } from '../services/historyService'; // NOVO
 import { CREDIT_SETTINGS } from '../constants';
 import NewsGeneratorForm from '../components/NewsGeneratorForm';
 import GeneratedNewsDisplay from '../components/GeneratedNewsDisplay';
 import { MOCK_THEMES } from '../constants';
+import { adminService } from '../services/adminService';
 
 const NewsGenerator: React.FC = () => {
   const [generatedNews, setGeneratedNews] = useState<GeneratedNews | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleGenerateNews = useCallback(async (themeId: string, customPrompt: string, tone: string) => {
+  const handleGenerateNews = useCallback(async (themeId: string, customPrompt: string, tone: string, model: AIModel | null) => {
     setError(null);
+
+    if (!model) {
+        setError('Nenhum modelo de IA foi selecionado ou está ativo.');
+        return;
+    }
 
     if (!userService.hasCredits(CREDIT_SETTINGS.generation_cost)) {
         setError(`Saldo insuficiente. A geração custa ${CREDIT_SETTINGS.generation_cost} crédito.`);
@@ -33,9 +40,7 @@ const NewsGenerator: React.FC = () => {
       return;
     }
     
-    // Busca o modelo ativo configurado no admin
-    const activeAI = adminService.getActiveGenerationModel();
-    const aiConfig = { modelName: activeAI.modelId, temperature: activeAI.temperature };
+    const aiConfig = { modelName: model.modelId, temperature: 0.7 };
 
     const cacheParams = { themeId, customPrompt, tone, model: aiConfig.modelName };
     const cachedResult = appCache.get<GeneratedNews>('news', cacheParams);
@@ -47,7 +52,6 @@ const NewsGenerator: React.FC = () => {
     }
 
     try {
-      // Passa a configuração de IA dinâmica para a função de geração
       const newsData = await generateNewsArticle(theme, customPrompt, tone, aiConfig);
       
       const success = creditService.deductCredits(CREDIT_SETTINGS.generation_cost, `Notícia (${theme.name}) com ${aiConfig.modelName}`);
@@ -55,6 +59,15 @@ const NewsGenerator: React.FC = () => {
       if (success) {
           appCache.set('news', cacheParams, newsData);
           setGeneratedNews(newsData);
+          // Log no histórico usando o novo serviço
+          historyService.add({
+              generationType: 'news',
+              aiModel: model.name,
+              promptSummary: `${theme.name} - ${customPrompt.substring(0, 30)}...`,
+              inputs: { theme: theme.name, tone, customPrompt },
+              result: newsData,
+              creditsUsed: CREDIT_SETTINGS.generation_cost
+          });
       } else {
           setError('Falha ao processar créditos.');
       }

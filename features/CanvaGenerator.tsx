@@ -1,10 +1,11 @@
+
 import React, { useState, useCallback } from 'react';
-import type { GeneratedCanvaStructure } from '../types';
+import type { GeneratedCanvaStructure, AIModel } from '../types';
 import { generateCanvaStructure } from '../services/geminiService';
 import { appCache } from '../services/cacheService';
 import { creditService } from '../services/creditService';
 import { userService } from '../services/userService';
-import { adminService } from '../services/adminService';
+import { historyService } from '../services/historyService'; // NOVO
 import { CREDIT_SETTINGS } from '../constants';
 import CanvaGeneratorForm from '../components/CanvaGeneratorForm';
 import CanvaGeneratorDisplay from '../components/CanvaGeneratorDisplay';
@@ -14,8 +15,13 @@ const CanvaGenerator: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleGenerate = useCallback(async (docType: string, subject: string, style: string) => {
+  const handleGenerate = useCallback(async (docType: string, subject: string, style: string, model: AIModel | null) => {
     setError(null);
+
+    if (!model) {
+        setError('Nenhum modelo de IA foi selecionado ou está ativo.');
+        return;
+    }
 
     if (!userService.hasCredits(CREDIT_SETTINGS.generation_cost)) {
         setError(`Saldo insuficiente. Custo: ${CREDIT_SETTINGS.generation_cost} crédito.`);
@@ -25,8 +31,7 @@ const CanvaGenerator: React.FC = () => {
     setIsLoading(true);
     setGeneratedStructure(null);
 
-    const activeAI = adminService.getActiveGenerationModel();
-    const aiConfig = { modelName: activeAI.modelId, temperature: activeAI.temperature };
+    const aiConfig = { modelName: model.modelId, temperature: 0.7 };
 
     const cacheParams = { docType, subject, style, model: aiConfig.modelName };
     const cachedResult = appCache.get<GeneratedCanvaStructure>('canva', cacheParams);
@@ -45,6 +50,14 @@ const CanvaGenerator: React.FC = () => {
       if (success) {
           appCache.set('canva', cacheParams, data);
           setGeneratedStructure(data);
+          historyService.add({
+              generationType: 'canva',
+              aiModel: model.name,
+              promptSummary: `${docType} sobre "${subject.substring(0, 30)}..."`,
+              inputs: { docType, subject, style },
+              result: data,
+              creditsUsed: CREDIT_SETTINGS.generation_cost
+          });
       } else {
           setError('Erro ao debitar créditos.');
       }

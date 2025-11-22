@@ -82,37 +82,37 @@ const AdminPanel: React.FC = () => {
         <div className="space-y-6">
             {/* Como Usar */}
             <div>
-                <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 tracking-wider">Como Usar (Rotas do Admin)</h4>
+                <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 tracking-wider">Acesso Rápido</h4>
                 <ul className="space-y-2 text-sm font-mono bg-gray-900/50 p-3 rounded border border-gray-800">
-                    <li className="flex items-center gap-2 group cursor-pointer hover:text-[#1b8a0f] transition-colors">
-                        <span className="text-blue-500">GET</span>
-                        <span className="text-gray-300 group-hover:text-white">/admin/</span> 
-                        <span className="text-gray-600 text-xs ml-auto">Home</span>
+                    <li className="flex items-center gap-2 group cursor-pointer hover:text-[#1b8a0f] transition-colors" onClick={() => setActiveTab('users')}>
+                        <span className="text-blue-500">VIEW</span>
+                        <span className="text-gray-300 group-hover:text-white">Usuários</span> 
+                        <span className="text-gray-600 text-xs ml-auto">Auth</span>
                     </li>
-                    <li className="flex items-center gap-2 group cursor-pointer hover:text-[#1b8a0f] transition-colors">
-                        <span className="text-blue-500">GET</span>
-                        <span className="text-gray-300 group-hover:text-white">/admin/dashboard/</span> 
-                        <span className="text-gray-600 text-xs ml-auto">KPIs</span>
+                    <li className="flex items-center gap-2 group cursor-pointer hover:text-[#1b8a0f] transition-colors" onClick={() => setActiveTab('multi_ai')}>
+                        <span className="text-blue-500">CONF</span>
+                        <span className="text-gray-300 group-hover:text-white">Multi-IA</span> 
+                        <span className="text-gray-600 text-xs ml-auto">Models</span>
                     </li>
-                    <li className="flex items-center gap-2 group cursor-pointer hover:text-[#1b8a0f] transition-colors">
-                        <span className="text-blue-500">GET</span>
-                        <span className="text-gray-300 group-hover:text-white">/admin/billing-report/</span> 
-                        <span className="text-gray-600 text-xs ml-auto">Relatórios</span>
+                    <li className="flex items-center gap-2 group cursor-pointer hover:text-[#1b8a0f] transition-colors" onClick={() => setActiveTab('finance_settings')}>
+                        <span className="text-blue-500">CONF</span>
+                        <span className="text-gray-300 group-hover:text-white">Financeiro</span> 
+                        <span className="text-gray-600 text-xs ml-auto">Billing</span>
                     </li>
                 </ul>
             </div>
 
             {/* Funcionalidades Implementadas */}
             <div>
-                <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 tracking-wider">Funcionalidades Ativas</h4>
+                <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 tracking-wider">Módulos Ativos</h4>
                 <ul className="space-y-2">
                     {[
-                        'Controle total de usuários',
-                        'Sistema de créditos',
-                        'Faturamento e pagamentos',
-                        'Histórico completo de atividades',
-                        'Analytics e relatórios',
-                        'Settings do sistema'
+                        'Sistema Multi-IA & Orchestrator',
+                        'Histórico de Gerações Completo',
+                        'Integração Mercado Pago (Sim.)',
+                        'Controle de Créditos & Logs',
+                        'SEO Avançado & Analytics',
+                        'Painel Admin Dashboard'
                     ].map((item, idx) => (
                         <li key={idx} className="flex items-center gap-2 text-gray-300 text-sm">
                             <div className="w-5 h-5 rounded-full bg-[#1b8a0f]/20 flex items-center justify-center flex-shrink-0">

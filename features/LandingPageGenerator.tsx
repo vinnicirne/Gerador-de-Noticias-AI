@@ -1,10 +1,11 @@
+
 import React, { useState, useCallback } from 'react';
-import type { LandingPageData } from '../types';
+import type { LandingPageData, AIModel } from '../types';
 import { generateLandingPage } from '../services/geminiService';
 import { appCache } from '../services/cacheService';
 import { creditService } from '../services/creditService';
 import { userService } from '../services/userService';
-import { adminService } from '../services/adminService';
+import { historyService } from '../services/historyService'; // NOVO
 import { CREDIT_SETTINGS } from '../constants';
 import LandingPageForm from '../components/LandingPageForm';
 import LandingPageDisplay from '../components/LandingPageDisplay';
@@ -14,8 +15,13 @@ const LandingPageGenerator: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleGenerate = useCallback(async (productName: string, targetAudience: string, painPoints: string, keyFeatures: string) => {
+  const handleGenerate = useCallback(async (productName: string, targetAudience: string, painPoints: string, keyFeatures: string, model: AIModel | null) => {
     setError(null);
+    
+    if (!model) {
+        setError('Nenhum modelo de IA foi selecionado ou está ativo.');
+        return;
+    }
 
     if (!productName || !targetAudience || !painPoints || !keyFeatures) {
       setError('Todos os campos são obrigatórios.');
@@ -30,8 +36,7 @@ const LandingPageGenerator: React.FC = () => {
     setIsLoading(true);
     setLandingPageData(null);
 
-    const activeAI = adminService.getActiveGenerationModel();
-    const aiConfig = { modelName: activeAI.modelId, temperature: activeAI.temperature };
+    const aiConfig = { modelName: model.modelId, temperature: 0.7 };
 
     const cacheParams = { productName, targetAudience, painPoints, keyFeatures, model: aiConfig.modelName };
     const cachedResult = appCache.get<LandingPageData>('landingPage', cacheParams);
@@ -50,6 +55,14 @@ const LandingPageGenerator: React.FC = () => {
       if (success) {
           appCache.set('landingPage', cacheParams, data);
           setLandingPageData(data);
+          historyService.add({
+              generationType: 'landing_page',
+              aiModel: model.name,
+              promptSummary: `LP para "${productName}"`,
+              inputs: { productName, targetAudience, painPoints, keyFeatures },
+              result: data,
+              creditsUsed: CREDIT_SETTINGS.generation_cost
+          });
       } else {
           setError('Erro no débito de créditos.');
       }

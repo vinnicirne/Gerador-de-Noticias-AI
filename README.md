@@ -1,20 +1,56 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
 
-# Run and deploy your AI Studio app
+# GDN_IA - Gerador de Notícias e Conteúdo com IA
 
-This contains everything you need to run your app locally.
+Plataforma completa para geração de conteúdo otimizado para SEO, utilizando orquestração Multi-IA (Gemini, OpenAI, Claude).
 
-View your app in AI Studio: https://ai.studio/apps/drive/1-raTmF9bIoaF63SI9NoprxjMlf7bJhAT
+## 🚀 Funcionalidades Principais
 
-## Run Locally
+### 1. Geração de Conteúdo
+*   **Gerador de Notícias:** Artigos jornalísticos completos com SEO Rank Math e validação de qualidade.
+*   **Landing Pages:** Estrutura completa de alta conversão (Headline, Benefícios, FAQ, CTA).
+*   **Marketing Copy:** Anúncios (Ads), Emails e Scripts de Vendas.
+*   **Engenharia de Prompts:** Criação de prompts avançados para Midjourney, DALL-E, etc.
+*   **Design System (Canva):** Receitas de design com paleta de cores e layout.
 
-**Prerequisites:**  Node.js
+### 2. Sistema Multi-IA
+*   **Orquestrador Inteligente:** Roteia requisições entre Google Gemini, OpenAI (ChatGPT) e Anthropic (Claude).
+*   **Seleção de Modelo:** O usuário pode escolher qual modelo usar para cada tarefa.
+*   **Preferências Salvas:** O sistema lembra a escolha de IA preferida do usuário.
 
+### 3. Experiência do Usuário & Histórico
+*   **Histórico Completo:** Registro detalhado de todas as gerações com filtros avançados (Tipo, Data, Modelo).
+*   **Visualização Rica:** Detalhes completos da geração, incluindo parâmetros de entrada (prompt original) e resultado formatado.
+*   **Paginação:** Navegação otimizada para grandes volumes de histórico.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+### 4. Gestão e Monetização
+*   **Sistema de Créditos:** Controle de saldo, custos por geração e compra de pacotes.
+*   **Pagamentos (Simulado):** Integração com Mercado Pago (Checkout Transparente e Pix).
+*   **Painel Administrativo:** 
+    *   Dashboard com KPIs (Usuários, Faturamento).
+    *   Gestão de Usuários e Permissões.
+    *   Configuração de Plataformas de IA e Custos.
+    *   Relatórios Financeiros.
+
+## 🛠️ Tecnologias
+
+*   **Frontend:** React, TypeScript, Tailwind CSS.
+*   **IA:** Google Gemini API (SDK), Integrações via API REST (OpenAI/Claude simuladas).
+*   **Arquitetura:** Services Pattern (UserService, AdminService, HistoryService, PaymentService).
+
+## ✅ Checklist de Entrega
+
+- [x] Sistema de Cache Inteligente
+- [x] Validação de Conteúdo (Quality Score)
+- [x] API RESTful Simulada (API Gateway)
+- [x] Dashboard Analítico
+- [x] Editor Visual Integrado
+- [x] Conteúdo Multimodal (Assets Visuais)
+- [x] Integrações Externas (WordPress, GA)
+- [x] Otimização Avançada de SEO (Rank Math)
+- [x] Sistema Multi-IA & Orquestrador
+- [x] Controle de Permissões e Créditos
+- [x] Fluxo de Pagamento (Mercado Pago)
+- [x] Histórico de Gerações Completo
+
+---
+**Status:** Pronto para Produção (Versão Frontend Simulada)

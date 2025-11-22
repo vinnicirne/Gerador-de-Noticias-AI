@@ -1,5 +1,4 @@
-
-import { UserProfile, CreditHistoryItem, ActivityLog } from '../types';
+import { UserProfile, CreditHistoryItem, ActivityLog, GenerationHistoryItem } from '../types';
 import { CREDIT_SETTINGS } from '../constants';
 import { notificationService } from './notificationService';
 
@@ -9,17 +8,18 @@ class UserService {
     private user: UserProfile;
     private transactionHistory: CreditHistoryItem[];
     private activityLogs: ActivityLog[];
+    private generationHistory: GenerationHistoryItem[];
     private listeners: UserUpdateListener[] = [];
 
     constructor() {
-        // Simulating a logged-in user (Admin by default for demo purposes)
         this.user = {
             id: 'user_123',
             username: 'admin_demo',
             email: 'admin@gdn-ia.com',
             userType: 'admin', 
             credits: CREDIT_SETTINGS.free_credits_on_signup,
-            isActive: true
+            isActive: true,
+            preferredAiModel: 'gemini-2.5-flash', // Inicia com um padrão
         };
 
         this.transactionHistory = [
@@ -42,6 +42,8 @@ class UserService {
                 timestamp: new Date().toLocaleString()
             }
         ];
+        
+        this.generationHistory = [];
     }
 
     public getUser(): UserProfile {
@@ -55,6 +57,19 @@ class UserService {
     public getActivities(): ActivityLog[] {
         return [...this.activityLogs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     }
+    
+    public getGenerationHistory(): GenerationHistoryItem[] {
+        return [...this.generationHistory];
+    }
+    
+    public addGenerationToHistory(item: Omit<GenerationHistoryItem, 'id' | 'createdAt'>): void {
+        const newHistoryItem: GenerationHistoryItem = {
+            id: `gen_${Date.now()}`,
+            ...item,
+            createdAt: new Date().toLocaleString()
+        };
+        this.generationHistory.unshift(newHistoryItem);
+    }
 
     public isAdmin(): boolean {
         return this.user.userType === 'admin';
@@ -64,7 +79,6 @@ class UserService {
         return this.user.credits >= cost;
     }
 
-    // Método de baixo nível para alterar saldo e registrar transação financeira
     public performTransaction(amount: number, description: string, type: 'purchase' | 'usage' | 'bonus'): void {
         if (type === 'usage') {
             this.user.credits -= amount;
@@ -83,7 +97,6 @@ class UserService {
         this.notifyListeners();
     }
 
-    // Método para registrar logs de auditoria
     public logActivity(action: string, details: string): void {
         this.activityLogs.unshift({
             id: `log_${Date.now()}`,
@@ -94,6 +107,19 @@ class UserService {
             timestamp: new Date().toLocaleString()
         });
     }
+
+    // --- PREFERRED MODEL METHODS ---
+    public getPreferredModel(): string | undefined {
+        return this.user.preferredAiModel;
+    }
+
+    public setPreferredModel(modelId: string): void {
+        this.user.preferredAiModel = modelId;
+        this.notifyListeners();
+        notificationService.notify(`Modelo preferido atualizado para: ${modelId}`, 'info');
+    }
+    // --- END PREFERRED MODEL ---
+
 
     public subscribe(listener: UserUpdateListener) {
         this.listeners.push(listener);

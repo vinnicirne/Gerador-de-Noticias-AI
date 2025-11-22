@@ -11,7 +11,8 @@ import IntegrationsDashboard from './features/IntegrationsDashboard';
 import AdminPanel from './features/AdminPanel';
 import CreditPurchase from './features/CreditPurchase';
 import NotificationToast from './components/NotificationToast';
-import PermissionGate from './components/PermissionGate'; // Import Middleware
+import PermissionGate from './components/PermissionGate';
+import GenerationHistory from './features/GenerationHistory'; // NOVO
 
 const App: React.FC = () => {
   const [activeTool, setActiveTool] = useState('news');
@@ -28,6 +29,8 @@ const App: React.FC = () => {
         return <CanvaGenerator />;
       case 'prompts':
         return <PromptGenerator />;
+      case 'history': // NOVA ROTA
+        return <GenerationHistory />;
       case 'api-integrations':
         return <ApiIntegrations />;
       case 'integrations':
@@ -35,7 +38,6 @@ const App: React.FC = () => {
       case 'credits':
         return <CreditPurchase />;
       case 'admin':
-        // Aplicação do Middleware de Permissão
         return (
             <PermissionGate 
                 requiredRole="admin" 

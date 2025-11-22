@@ -3,10 +3,12 @@ import React, { useState } from 'react';
 import LoadingSpinner from './LoadingSpinner';
 import CharacterCounter from './CharacterCounter';
 import { COPYWRITING_TYPES } from '../constants';
+import AIModelSelector from './AIModelSelector';
+import { AIModel } from '../types';
 
 interface CopyGeneratorFormProps {
   isLoading: boolean;
-  onSubmit: (copyType: { id: string, name: string }, productName: string, targetAudience: string, message: string) => void;
+  onSubmit: (copyType: { id: string, name: string }, productName: string, targetAudience: string, message: string, model: AIModel | null) => void;
 }
 
 const MAX_LENGTHS = {
@@ -20,13 +22,14 @@ const CopyGeneratorForm: React.FC<CopyGeneratorFormProps> = ({ isLoading, onSubm
   const [productName, setProductName] = useState<string>('');
   const [targetAudience, setTargetAudience] = useState<string>('');
   const [message, setMessage] = useState<string>('');
+  const [selectedModel, setSelectedModel] = useState<AIModel | null>(null);
 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const selectedType = COPYWRITING_TYPES.find(c => c.id === selectedCopyTypeId);
     if (selectedType && !isLoading) {
-      onSubmit(selectedType, productName, targetAudience, message);
+      onSubmit(selectedType, productName, targetAudience, message, selectedModel);
     }
   };
 
@@ -34,6 +37,9 @@ const CopyGeneratorForm: React.FC<CopyGeneratorFormProps> = ({ isLoading, onSubm
     <div className="bg-gray-900/20 p-6 rounded-xl border border-[#136c0b]/30 shadow-[0_0_10px_rgba(27,138,15,0.4)] sticky top-0">
       <h2 className="text-lg font-semibold text-[#1b8a0f] mb-4">Gerador de Copy</h2>
       <form onSubmit={handleSubmit} className="space-y-6">
+        
+        <AIModelSelector selectedModel={selectedModel} onModelChange={setSelectedModel} disabled={isLoading} />
+        
         <div>
           <label htmlFor="copy-type" className="block text-sm font-medium text-gray-500 mb-1">
             Tipo de Copy
@@ -115,7 +121,7 @@ const CopyGeneratorForm: React.FC<CopyGeneratorFormProps> = ({ isLoading, onSubm
 
         <button
           type="submit"
-          disabled={isLoading}
+          disabled={isLoading || !selectedModel}
           className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#1b8a0f] hover:bg-[#24a813] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-[#1b8a0f] disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
         >
           {isLoading ? <LoadingSpinner className="h-5 w-5 -ml-1 mr-3 text-white" /> : 'Gerar Copy'}

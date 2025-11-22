@@ -1,8 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { integrationService } from '../services/integrationService';
-import { IntegrationConfig, FeedbackLog } from '../types';
+import { aiModelService } from '../services/aiModelService';
+import { IntegrationConfig, FeedbackLog, AIModel } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner';
+import AIModelSelector from '../components/AIModelSelector';
 
 type Tab = 'integrations' | 'ai-models';
 
@@ -11,9 +13,19 @@ const IntegrationsDashboard: React.FC = () => {
   const [config, setConfig] = useState<IntegrationConfig>(integrationService.getConfig());
   const [feedbackLogs, setFeedbackLogs] = useState<FeedbackLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // State for the preferred model selector
+  const [preferredModel, setPreferredModel] = useState<AIModel | null>(null);
 
   useEffect(() => {
     setFeedbackLogs(integrationService.getFeedbackLogs());
+    // On tab load, find the full AIModel object for the preferred model ID
+    const preferredModelId = aiModelService.getUserPreferredModelId();
+    if(preferredModelId) {
+        const models = aiModelService.getAvailableModels();
+        const model = models.find(m => m.modelId === preferredModelId);
+        setPreferredModel(model || null);
+    }
   }, [activeTab]);
 
   const handleSave = (section: keyof IntegrationConfig, data: any) => {
@@ -27,10 +39,10 @@ const IntegrationsDashboard: React.FC = () => {
     }, 1000);
   };
 
-  const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const model = e.target.value;
-    setConfig({ ...config, aiModel: model });
-    integrationService.setAIModel(model);
+  const handlePreferredModelChange = (model: AIModel | null) => {
+    setPreferredModel(model);
+    // Note: With autoSave={true} in AIModelSelector, we don't explicitly need to call setter here if we only want it saved on change,
+    // but updating local state is still good practice for UI responsiveness.
   };
 
   const handleDisconnect = (section: keyof IntegrationConfig) => {
@@ -41,7 +53,6 @@ const IntegrationsDashboard: React.FC = () => {
 
   return (
     <div className="animate-fade-in">
-      {/* Tabs Header */}
       <div className="flex border-b border-[#136c0b]/30 mb-6">
         <button
           className={`px-6 py-3 text-sm font-medium transition-colors ${activeTab === 'integrations' ? 'border-b-2 border-[#1b8a0f] text-[#1b8a0f]' : 'text-gray-400 hover:text-white'}`}
@@ -57,10 +68,8 @@ const IntegrationsDashboard: React.FC = () => {
         </button>
       </div>
 
-      {/* Content */}
       {activeTab === 'integrations' ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* WordPress Card */}
             <div className="bg-black border border-[#136c0b]/30 p-6 rounded-xl shadow relative overflow-hidden">
               <div className="absolute top-0 right-0 p-4 opacity-10">
                 <svg className="w-32 h-32 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12.003 0a12.003 12.003 0 0 0-12 12c0 5.53 3.73 10.218 8.818 11.568L4.537 11.37A7.42 7.42 0 0 1 4.38 9.526c0-1.284.462-2.438 1.236-3.333l.144-.145.145.145c3.57 3.57 3.57 9.346 3.57 9.346s.412-1.08.618-1.62l-2.668-8.15c.972-.796 2.212-1.27 3.573-1.27 1.388 0 2.648.493 3.628 1.315l-2.724 8.166s.41.997.616 1.505l3.79-10.92c.098-.04.196-.078.296-.114.03.08.056.163.083.246l-4.72 13.59c3.693-1.606 6.303-5.28 6.303-9.564 0-6.63-5.373-12-12-12z"/></svg>
@@ -92,7 +101,6 @@ const IntegrationsDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Google Analytics Card */}
             <div className="bg-black border border-[#136c0b]/30 p-6 rounded-xl shadow relative overflow-hidden">
               <div className="absolute top-0 right-0 p-4 opacity-10">
                 <svg className="w-32 h-32 text-orange-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12.5 22h-11v-6.5h11V22zm1-17h10v17h-10V5zm-1-3H1.5v18.5h11V2z"/></svg>
@@ -121,7 +129,6 @@ const IntegrationsDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Search Console Card */}
             <div className="bg-black border border-[#136c0b]/30 p-6 rounded-xl shadow relative overflow-hidden">
               <div className="absolute top-0 right-0 p-4 opacity-10">
                 <svg className="w-32 h-32 text-blue-500" fill="currentColor" viewBox="0 0 24 24"><path d="M21.6 11.2h-3.2v3.2h3.2v-3.2zM16 5.6h-3.2v8.8h3.2V5.6zM10.4 8h-3.2v6.4h3.2V8zM4.8 12.8H1.6v1.6h3.2v-1.6z"/></svg>
@@ -153,28 +160,17 @@ const IntegrationsDashboard: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div className="lg:col-span-5 space-y-6">
-                <div className="bg-black border border-[#136c0b]/30 p-6 rounded-xl shadow">
-                    <h2 className="text-xl font-bold text-white mb-4">Configuração do Modelo IA</h2>
-                    <p className="text-gray-400 text-sm mb-6">Escolha o modelo que impulsionará o GDN_IA. Modelos mais avançados podem ser mais lentos, mas oferecem maior capacidade de raciocínio.</p>
-                    
-                    <label className="block text-sm font-medium text-gray-500 mb-1">Modelo Ativo</label>
-                    <select
-                        value={config.aiModel}
-                        onChange={handleModelChange}
-                        className="w-full bg-gray-900 border border-gray-700 rounded-md p-3 text-white text-sm focus:ring-[#1b8a0f] focus:border-[#1b8a0f]"
-                    >
-                        <option value="gemini-2.5-flash">Gemini 2.5 Flash (Recomendado - Rápido & Versátil)</option>
-                        <option value="gemini-1.5-pro">Gemini 1.5 Pro (Complexo - Melhor Raciocínio)</option>
-                        <option value="gemini-2.5-flash-lite-preview">Gemini 2.5 Flash Lite (Experimental)</option>
-                    </select>
-
-                     <div className="mt-6 bg-[#1b8a0f]/10 border border-[#1b8a0f]/20 p-4 rounded-lg">
-                        <h4 className="text-[#1b8a0f] font-bold text-sm mb-1">Status do Modelo</h4>
-                        <p className="text-gray-300 text-xs">
-                            O modelo <b>{config.aiModel}</b> está ativo e pronto para uso em todas as ferramentas.
-                        </p>
-                     </div>
-                </div>
+                 <div className="bg-black border border-[#136c0b]/30 p-6 rounded-xl shadow">
+                    <h2 className="text-xl font-bold text-white mb-4">Modelo Preferido do Usuário</h2>
+                    <p className="text-gray-400 text-sm mb-6">Selecione seu modelo de IA padrão. Ele será pré-selecionado em todas as ferramentas de geração.</p>
+                    <AIModelSelector 
+                        label="Modelo de IA Padrão"
+                        selectedModel={preferredModel}
+                        onModelChange={handlePreferredModelChange}
+                        showHelpText={true}
+                        autoSave={true}
+                    />
+                 </div>
             </div>
 
             <div className="lg:col-span-7">
@@ -218,7 +214,6 @@ const IntegrationsDashboard: React.FC = () => {
   );
 };
 
-// Sub-componente simples de formulário (mantido igual)
 const IntegrationForm: React.FC<{ fields: any[], onSubmit: (data: any) => void, isLoading: boolean }> = ({ fields, onSubmit, isLoading }) => {
     const [formData, setFormData] = useState<any>({});
 

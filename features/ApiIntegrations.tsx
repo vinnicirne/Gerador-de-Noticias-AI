@@ -30,10 +30,10 @@ const ApiIntegrations: React.FC = () => {
     setResponse(null);
 
     try {
-      const payload = JSON.parse(requestBody);
+      const payload = requestBody ? JSON.parse(requestBody) : {};
       const res = await apiGateway({
         endpoint: selectedEndpoint,
-        method: 'POST',
+        method: selectedEndpoint.includes('set-preferred') ? 'POST' : 'GET', // Detecção simples
         apiKey: apiKey,
         payload: payload
       });
@@ -51,6 +51,10 @@ const ApiIntegrations: React.FC = () => {
     { path: '/api/v1/copy/generate', label: 'Gerar Marketing Copy', template: { copyTypeId: 'facebook-aida', productName: '...', targetAudience: '...', message: '...' } },
     { path: '/api/v1/prompts/generate', label: 'Gerar Prompt IA', template: { platform: 'Midjourney', category: 'Logos', description: '...', style: '...' } },
     { path: '/api/v1/canva/structure', label: 'Estrutura Canva', template: { docType: 'Post Instagram', subject: '...', style: '...' } },
+    // Novos Endpoints
+    { path: '/api/ai-models/', label: 'Listar Modelos IA (GET)', template: {} },
+    { path: '/api/set-preferred-model/', label: 'Definir Modelo Preferido', template: { model_id: 'gpt-4-turbo' } },
+    { path: '/api/history/', label: 'Histórico de Gerações (GET)', template: {} },
   ];
 
   const handleEndpointChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -94,8 +98,10 @@ const ApiIntegrations: React.FC = () => {
             {endpoints.map(ep => (
               <li key={ep.path} className="text-sm">
                 <div className="flex items-center gap-2">
-                  <span className="bg-blue-900/50 text-blue-400 text-xs px-2 py-0.5 rounded font-mono">POST</span>
-                  <span className="text-gray-300 font-mono">{ep.path}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded font-mono ${ep.path.includes('generate') || ep.path.includes('set') ? 'bg-blue-900/50 text-blue-400' : 'bg-green-900/50 text-green-400'}`}>
+                      {ep.path.includes('generate') || ep.path.includes('set') ? 'POST' : 'GET'}
+                  </span>
+                  <span className="text-gray-300 font-mono truncate" title={ep.path}>{ep.path}</span>
                 </div>
               </li>
             ))}
@@ -133,7 +139,12 @@ const ApiIntegrations: React.FC = () => {
                 </div>
                 <div>
                    <label className="block text-sm font-medium text-gray-500 mb-1">Método</label>
-                   <input type="text" value="POST" disabled className="w-full bg-gray-900 border border-gray-700 rounded-md p-2 text-gray-400 text-sm" />
+                   <input 
+                        type="text" 
+                        value={selectedEndpoint.includes('generate') || selectedEndpoint.includes('set') ? 'POST' : 'GET'} 
+                        disabled 
+                        className="w-full bg-gray-900 border border-gray-700 rounded-md p-2 text-gray-400 text-sm" 
+                   />
                 </div>
               </div>
 

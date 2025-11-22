@@ -115,6 +115,17 @@ export interface GeneratedCanvaStructure {
   isFromCache?: boolean;
 }
 
+export interface GenerationHistoryItem {
+    id: string;
+    generationType: 'news' | 'landing_page' | 'copy' | 'prompt' | 'canva';
+    aiModel: string;
+    promptSummary: string; 
+    inputs?: any; // Stores the full configuration object used for generation
+    result: any; 
+    creditsUsed: number;
+    createdAt: string;
+}
+
 export type NotificationType = 'success' | 'error' | 'info';
 
 export interface Notification {
@@ -164,6 +175,7 @@ export interface UserProfile {
   userType: UserType;
   credits: number;
   isActive: boolean;
+  preferredAiModel?: string;
 }
 
 export interface CreditPackage {
@@ -204,11 +216,10 @@ export interface PaymentTransaction {
     method: 'pix' | 'credit_card';
     createdAt: string;
     updatedAt: string;
-    preferenceId?: string; // ID da preferência MP
-    initPoint?: string; // Link de pagamento MP
+    preferenceId?: string; 
+    initPoint?: string; 
 }
 
-// --- MERCADO PAGO SPECIFIC TYPES ---
 export interface MercadoPagoItem {
     title: string;
     quantity: number;
@@ -233,7 +244,7 @@ export interface MercadoPagoPreference {
 
 export interface MercadoPagoResponse {
     id: string;
-    init_point: string; // Link para checkout
+    init_point: string; 
     sandbox_init_point: string;
 }
 

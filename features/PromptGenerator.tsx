@@ -1,10 +1,11 @@
+
 import React, { useState, useCallback } from 'react';
-import type { GeneratedPrompt } from '../types';
+import type { GeneratedPrompt, AIModel } from '../types';
 import { generateAdvancedPrompt } from '../services/geminiService';
 import { appCache } from '../services/cacheService';
 import { creditService } from '../services/creditService';
 import { userService } from '../services/userService';
-import { adminService } from '../services/adminService';
+import { historyService } from '../services/historyService'; // NOVO
 import { CREDIT_SETTINGS } from '../constants';
 import PromptGeneratorForm from '../components/PromptGeneratorForm';
 import PromptGeneratorDisplay from '../components/PromptGeneratorDisplay';
@@ -14,8 +15,13 @@ const PromptGenerator: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleGenerate = useCallback(async (platform: string, category: string, description: string, style: string) => {
+  const handleGenerate = useCallback(async (platform: string, category: string, description: string, style: string, model: AIModel | null) => {
     setError(null);
+
+    if (!model) {
+        setError('Nenhum modelo de IA foi selecionado ou está ativo.');
+        return;
+    }
 
     if (!userService.hasCredits(CREDIT_SETTINGS.generation_cost)) {
         setError(`Saldo insuficiente. Custo: ${CREDIT_SETTINGS.generation_cost} crédito.`);
@@ -25,8 +31,7 @@ const PromptGenerator: React.FC = () => {
     setIsLoading(true);
     setGeneratedPrompt(null);
     
-    const activeAI = adminService.getActiveGenerationModel();
-    const aiConfig = { modelName: activeAI.modelId, temperature: activeAI.temperature };
+    const aiConfig = { modelName: model.modelId, temperature: 0.7 };
 
     const cacheParams = { platform, category, description, style, model: aiConfig.modelName };
     const cachedResult = appCache.get<GeneratedPrompt>('prompt', cacheParams);
@@ -45,6 +50,14 @@ const PromptGenerator: React.FC = () => {
       if (success) {
           appCache.set('prompt', cacheParams, promptData);
           setGeneratedPrompt(promptData);
+           historyService.add({
+              generationType: 'prompt',
+              aiModel: model.name,
+              promptSummary: `${platform} - ${category}`,
+              inputs: { platform, category, description, style },
+              result: promptData,
+              creditsUsed: CREDIT_SETTINGS.generation_cost
+          });
       } else {
           setError('Erro no débito de créditos.');
       }
