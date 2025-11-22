@@ -329,3 +329,54 @@ export interface AIUsageLog {
     cost: number;
     timestamp: string;
 }
+// Adicionar ao final do arquivo types.ts existente
+
+// ============================================
+// SISTEMA DE PLANOS E GERENCIAMENTO
+// ============================================
+
+export type PlanTier = 'free' | 'pro' | 'enterprise';
+
+export interface PlanLimits {
+  tier: PlanTier;
+  name: string;
+  price: number;
+  creditsPerMonth: number;
+  isUnlimited: boolean;
+  features: {
+    basicModels: boolean;
+    allModels: boolean;
+    premiumModels: boolean;
+    historyDays: number;
+    seoAdvanced: boolean;
+    apiAccess: boolean;
+    prioritySupport: boolean;
+    customBranding: boolean;
+  };
+  restrictions: {
+    maxGenerationsPerDay?: number;
+    allowedModels: string[];
+  };
+}
+
+export interface UserUsage {
+  userId: string;
+  planTier: PlanTier;
+  currentPeriodStart: Date;
+  currentPeriodEnd: Date;
+  creditsUsed: number;
+  creditsRemaining: number;
+  generationsToday: number;
+  lastResetDate: Date;
+  warnings: {
+    level: 'info' | 'warning' | 'critical';
+    message: string;
+    percentage: number;
+  }[];
+}
+
+export interface PlanChangeResult {
+  success: boolean;
+  message: string;
+  prorated?: number;
+}

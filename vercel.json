@@ -6,8 +6,8 @@
       "use": "@vercel/static-build"
     },
     {
-      "src": "backend/**/*.js", 
-      "use": "@vercel/node"
+      "src": "/api/webhooks/mercadopago",
+      "dest": "backend/webhooks/mercadopago.ts"
     }
   ],
   "routes": [

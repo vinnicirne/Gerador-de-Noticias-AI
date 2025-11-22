@@ -202,3 +202,74 @@ export const SYSTEM_STATUS = {
     }
   }
 };
+// Adicionar ao final do arquivo constants.ts
+
+// ============================================
+// CONFIGURAÇÃO DE PLANOS
+// ============================================
+
+import { PlanLimits, PlanTier } from './types';
+
+export const PLAN_CONFIGS: Record<PlanTier, PlanLimits> = {
+  free: {
+    tier: 'free',
+    name: 'Free',
+    price: 0,
+    creditsPerMonth: 10,
+    isUnlimited: false,
+    features: {
+      basicModels: true,
+      allModels: false,
+      premiumModels: false,
+      historyDays: 7,
+      seoAdvanced: false,
+      apiAccess: false,
+      prioritySupport: false,
+      customBranding: false
+    },
+    restrictions: {
+      maxGenerationsPerDay: 3,
+      allowedModels: ['gemini-2.5-flash']
+    }
+  },
+  pro: {
+    tier: 'pro',
+    name: 'Pro',
+    price: 49.90,
+    creditsPerMonth: 100,
+    isUnlimited: false,
+    features: {
+      basicModels: true,
+      allModels: true,
+      premiumModels: false,
+      historyDays: 30,
+      seoAdvanced: true,
+      apiAccess: false,
+      prioritySupport: true,
+      customBranding: false
+    },
+    restrictions: {
+      allowedModels: ['gemini-2.5-flash', 'gemini-1.5-pro', 'gpt-4-turbo']
+    }
+  },
+  enterprise: {
+    tier: 'enterprise',
+    name: 'Enterprise',
+    price: 299.90,
+    creditsPerMonth: 999999,
+    isUnlimited: true,
+    features: {
+      basicModels: true,
+      allModels: true,
+      premiumModels: true,
+      historyDays: 999999,
+      seoAdvanced: true,
+      apiAccess: true,
+      prioritySupport: true,
+      customBranding: true
+    },
+    restrictions: {
+      allowedModels: ['*']
+    }
+  }
+};

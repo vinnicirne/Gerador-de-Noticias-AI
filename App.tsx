@@ -38,7 +38,10 @@ const App: React.FC = () => {
       case 'credits':
         return <CreditPurchase />;
       case 'admin':
-        return (
+        return
+	  case 'billing':
+		return <BillingPage />;
+		(
             <PermissionGate 
                 requiredRole="admin" 
                 onAccessDenied={() => setActiveTool('news')}
