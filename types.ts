@@ -1,390 +1,133 @@
-
-
-export interface NewsTheme {
-  id: string;
-  name: string;
-  description: string;
-  is_active: boolean;
+export enum NewsType {
+  CURRENT = 'current',
+  PREDICTIVE = 'predictive',
 }
 
-export interface RankMathSEOData {
+export type NewsStatus = 'pending' | 'approved' | 'rejected';
+
+export interface Source {
+  uri: string;
   title: string;
-  description: string;
-  slug: string;
-  primaryKeyword: string;
-  secondaryKeywords: string[];
-  seoFocus: 'informacional' | 'comercial' | 'transacional' | string;
-  keywordDifficulty: 'baixa' | 'média' | 'alta' | string;
-  schemaType: 'Article' | 'NewsArticle' | 'WebPage' | 'Product' | string;
 }
 
-export interface ContentValidationMetrics {
-  factualityScore: number;
-  originalityScore: number;
-  readabilityScore: number;
-  seoScore: number;
-  overallScore: number;
-  suggestions: string[];
-}
-
-export interface SEOAnalysisReport {
-  score: number;
-  keywordDensity: {
-    count: number;
-    density: number;
-    status: 'low' | 'good' | 'high';
+export interface NewsArticle {
+  id?: number;
+  titulo: string;
+  conteudo: string;
+  sources?: Source[];
+  status?: NewsStatus;
+  tipo?: NewsType;
+  criado_em?: string;
+  author?: {
+    email: string;
   };
-  metaAnalysis: {
-    titleLength: number;
-    titleHasKeyword: boolean;
-    descriptionLength: number;
-    descriptionHasKeyword: boolean;
-  };
-  recommendations: string[];
-  schemaJsonLd: string;
-  wordCount: number;
 }
 
-export interface CompetitionAnalysis {
-  myContent: {
-    wordCount: number;
-    keywordDensity: number;
-    readabilityScore: number;
-  };
-  competitorsAvg: {
-    wordCount: number;
-    keywordDensity: number;
-    readabilityScore: number;
-  };
-  gapAnalysis: string[];
-}
+export type UserRole = 'user' | 'editor' | 'admin' | 'super_admin';
+export type UserStatus = 'active' | 'inactive' | 'banned';
 
-export interface VisualAssets {
-    imagePrompts: string[];
-    infographicSuggestions: string[];
-}
-
-export interface GeneratedNews {
-  seo: RankMathSEOData;
-  content: string;
-  visualAssets?: VisualAssets;
-  theme: NewsTheme;
-  modelUsed: string;
-  generatedAt: Date;
-  isFromCache?: boolean;
-  validation?: ContentValidationMetrics;
-}
-
-export interface AIConfig {
-  modelName: string;
-  temperature: number;
-}
-
-export interface LandingPageData {
-  seo: RankMathSEOData;
-  content: string;
-  modelUsed: string;
-  generatedAt: Date;
-  isFromCache?: boolean;
-  validation?: ContentValidationMetrics;
-}
-
-export interface GeneratedCopy {
-  seo: RankMathSEOData;
-  content: string;
-  copyType: string;
-  modelUsed: string;
-  generatedAt: Date;
-  isFromCache?: boolean;
-  validation?: ContentValidationMetrics;
-}
-
-export interface GeneratedPrompt {
-  prompt: string;
-  platform: string;
-  category: string;
-  modelUsed: string;
-  generatedAt: Date;
-  isFromCache?: boolean;
-}
-
-export interface GeneratedCanvaStructure {
-  content: string;
-  docType: string;
-  modelUsed: string;
-  generatedAt: Date;
-  isFromCache?: boolean;
-}
-
-export interface GenerationHistoryItem {
-    id: string;
-    generationType: 'news' | 'landing_page' | 'copy' | 'prompt' | 'canva';
-    aiModel: string;
-    promptSummary: string; 
-    inputs?: any; // Stores the full configuration object used for generation
-    result: any; 
-    creditsUsed: number;
-    createdAt: string;
-}
-
-export type NotificationType = 'success' | 'error' | 'info';
-
-export interface Notification {
+export interface User {
   id: string;
-  message: string;
-  type: NotificationType;
-}
-
-export interface IntegrationConfig {
-  aiModel?: string;
-  wordpress?: {
-    connected: boolean;
-    siteUrl: string;
-    username: string;
-  };
-  googleAnalytics?: {
-    connected: boolean;
-    propertyId: string;
-  };
-  searchConsole?: {
-    connected: boolean;
-    siteUrl: string;
-  };
-}
-
-export interface AnalyticsData {
-  views: number;
-  clicks: number;
-  ctr: number;
-  avgPosition: number;
-}
-
-export interface FeedbackLog {
-  id: string;
-  type: 'news' | 'copy' | 'landing-page';
-  rating: 'up' | 'down';
-  timestamp: string;
-  context: string;
-}
-
-export type UserType = 'admin' | 'editor' | 'user';
-
-export interface UserProfile {
-  id: string;
-  username: string;
   email: string;
-  userType: UserType;
+  full_name: string;
+  role: UserRole;
   credits: number;
-  // credits property is now managed by plans
-  planTier: PlanTier; 
-  usageStats: {
-    creditsUsedThisMonth: number;
-    generationsToday: number;
-    lastResetDate: Date;
-  };
-  isActive: boolean;
-  preferredAiModel?: string;
+  status: UserStatus;
+  plan?: string;
 }
 
-export interface AdminUser {
-  id: string;
-  username: string;
-  email: string;
-  userType: 'admin' | 'subscriber' | 'trial';
-  credits: number; // Kept for admin display purposes, but logic will use plans
-  isActive: boolean;
-  dateJoined: string;
-  lastLogin: string;
+export interface Log {
+  id: number;
+  usuario_id: string;
+  acao: string;
+  modulo: string;
+  data: string;
+  user_email?: string; // Optional: for display purposes
+  detalhes?: Record<string, any>; // For audit trail
 }
 
-export interface AdminChartData {
-    dates: string[];
-    userRegistrations: number[];
-    newsGenerated: number[];
-}
+export type AdminView = 'dashboard' | 'users' | 'news' | 'payments' | 'multi_ia_system' | 'logs';
 
-export interface ActivityLog {
-  id: string;
-  user: string;
-  action: string;
-  details: string;
-  ip: string;
-  timestamp: string;
-}
+export type TransactionStatus = 'pending' | 'approved' | 'failed';
+export type PaymentMethod = 'pix' | 'card';
 
-export interface AdminDashboardData {
-  totalUsers: number;
-  activeUsers: number;
-  totalCredits: number;
-  totalRevenue: number;
-  recentActivities: ActivityLog[];
-  pendingBills: number;
-  chartData: AdminChartData;
-}
-
-export type AIProviderName = 'gemini' | 'chatgpt' | 'claude' | 'sora' | 'midjourney' | 'dalle';
-
-export interface AIPlatform {
-    id: string;
-    name: AIProviderName;
-    displayName: string;
-    apiKey: string;
-    baseUrl: string;
-    isActive: boolean;
-    costPerToken: number;
-    maxTokens: number;
-}
-
-export interface AIModel {
-    id: string;
-    platformId: string;
-    name: string;
-    modelId: string;
-    isActive: boolean;
-    contextLength: number;
-    supportsVision: boolean;
-    supportsAudio: boolean;
-}
-
-export interface AIUsageLog {
-    id: string;
-    user: string;
-    platform: string;
-    model: string;
-    inputTokens: number;
-    outputTokens: number;
-    totalTokens: number;
-    cost: number;
-    timestamp: string;
-}
-
-// ============================================
-// SISTEMA DE PLANOS E GERENCIAMENTO
-// ============================================
-
-export type PlanTier = 'free' | 'pro' | 'enterprise';
-
-export interface PlanLimits {
-  tier: PlanTier;
-  name: string;
-  price: number;
-  creditsPerMonth: number;
-  isUnlimited: boolean;
-  features: {
-    basicModels: boolean;
-    allModels: boolean;
-    premiumModels: boolean;
-    historyDays: number;
-    seoAdvanced: boolean;
-    apiAccess: boolean;
-    prioritySupport: boolean;
-    customBranding: boolean;
-  };
-  restrictions: {
-    maxGenerationsPerDay?: number;
-    allowedModels: string[];
+export interface Transaction {
+  id: number;
+  usuario_id: string;
+  valor: number;
+  metodo: PaymentMethod;
+  status: TransactionStatus;
+  data: string;
+  user?: {
+    email: string;
   };
 }
 
-export interface UserUsage {
-  userId: string;
-  planTier: PlanTier;
-  currentPeriodStart: Date;
-  currentPeriodEnd: Date;
-  creditsUsed: number;
-  creditsRemaining: number;
-  generationsToday: number;
-  lastResetDate: Date;
-  warnings: {
-    level: 'info' | 'warning' | 'critical';
-    message: string;
-    percentage: number;
-  }[];
-}
+// --- NEW PAYMENT SETTINGS TYPES ---
 
-export interface PlanChangeResult {
-  success: boolean;
-  message: string;
-  prorated?: number;
-}
-
-// ============================================
-// SISTEMA DE FINANCEIRO E ATIVIDADES
-// ============================================
-
-export interface BillingTransaction {
-  id: string;
-  user: string;
-  amount: number;
-  creditsPurchased: number;
-  status: 'paid' | 'pending' | 'failed';
-  paymentMethod: 'credit_card' | 'pix';
-  date: string;
-}
-
-export interface CreditHistoryItem {
-    id: string;
-    date: Date;
-    description: string;
-    type: 'purchase' | 'usage' | 'bonus';
-    amount: number;
+export interface GatewayConfig {
+  enabled: boolean;
+  publicKey: string;
+  secretKey: string; // Generic name for Access Token or Secret Key
 }
 
 export interface CreditPackage {
-    id: string;
-    name: string;
-    credits: number;
-    price: number;
-    isActive: boolean;
-    order: number;
+  id: string;
+  nome: string;
+  quantidade: number;
+  preco: number;
+  ativo: boolean;
 }
 
-export type PaymentPlatform = 'mercadopago' | 'stripe';
-
-export interface PaymentConfig {
-    platform: PaymentPlatform;
-    isActive: boolean;
-    publicKey: string;
-    accessToken: string;
+export interface PaymentSettings {
+  gateways: {
+    stripe: GatewayConfig;
+    mercadoPago: GatewayConfig;
+  };
+  packages: CreditPackage[];
 }
 
-export interface PaymentTransaction {
-    id: string;
-    paymentId: string;
-    user: string;
-    packageId: string;
-    amount: number;
-    credits: number;
-    status: 'pending' | 'approved' | 'rejected';
-    method: 'pix' | 'credit_card';
-    createdAt: string;
-    updatedAt: string;
-    preferenceId?: string;
-    initPoint?: string;
+// --- NEW MULTI-AI SYSTEM TYPES ---
+
+export interface AIPlatform {
+  enabled: boolean;
+  apiKey: string;
+  costPerMillionTokens: number;
+  maxTokens: number;
 }
 
-export interface MercadoPagoPreference {
-    items: {
-        title: string;
-        quantity: number;
-        currency_id: 'BRL';
-        unit_price: number;
-    }[];
-    payer: {
-        email: string;
-    };
-    back_urls: {
-        success: string;
-        failure: string;
-        pending: string;
-    };
-    auto_return: 'approved';
-    external_reference: string;
-    notification_url: string;
+export interface AIPlatformSettings {
+  gemini: AIPlatform;
+  openai: AIPlatform;
+  claude: AIPlatform;
 }
 
-export interface MercadoPagoResponse {
-    id: string;
-    init_point: string;
-    sandbox_init_point: string;
+export interface AIModel {
+  id: string;
+  nome: string;
+  plataforma: 'gemini' | 'openai' | 'claude';
+  contexto_maximo: number;
+  capacidades: {
+    vision: boolean;
+    audio: boolean;
+  };
+  ativo: boolean;
+  custo_token: number;
+}
+
+export interface MultiAISettings {
+  platforms: AIPlatformSettings;
+  models: AIModel[];
+}
+
+export interface AILog {
+  id: number;
+  usuario_id: string;
+  modelo_id: string;
+  tokens: number;
+  custo: number;
+  data: string;
+  user?: { // For joining with user table
+    email: string;
+  };
 }

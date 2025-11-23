@@ -1,5 +1,6 @@
 {
   "name": "GDN_IA",
-  "description": "An AI-powered application that generates SEO-optimized news articles based on selected themes and custom prompts using the Gemini API. It provides a title, URL slug, meta description, and full article content ready for publishing.",
+  "description": "An intelligent news generator application that creates articles based on recent events within the last 48 hours using web search, as well as predictive news for future events.",
+  "version": "1.0.2",
   "requestFramePermissions": []
 }
