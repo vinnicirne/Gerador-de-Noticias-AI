@@ -1,6 +1,12 @@
-export enum NewsType {
-  CURRENT = 'current',
-  PREDICTIVE = 'predictive',
+
+import { ReactNode } from 'react';
+import { Plan, ServiceKey, UserPlan } from './types/plan.types'; // Importar os novos tipos
+
+export type { Plan, ServiceKey, UserPlan }; // Re-exportar para uso em outros arquivos
+
+export interface BaseComponentProps {
+  children?: ReactNode;
+  className?: string;
 }
 
 export type NewsStatus = 'pending' | 'approved' | 'rejected';
@@ -16,7 +22,8 @@ export interface NewsArticle {
   conteudo: string;
   sources?: Source[];
   status?: NewsStatus;
-  tipo?: NewsType;
+  tipo?: string; // Tipo do conteúdo (news, image, landing_page, etc)
+  author_id?: string; // ID do autor
   criado_em?: string;
   author?: {
     email: string;
@@ -33,7 +40,28 @@ export interface User {
   role: UserRole;
   credits: number;
   status: UserStatus;
-  plan?: string;
+  plan: UserPlan; 
+  created_at?: string;
+  last_login?: string;
+  // Affiliate System
+  affiliate_code?: string;
+  referred_by?: string;
+  affiliate_balance?: number;
+  asaas_customer_id?: string; // Novo campo para Asaas Customer ID
+  // Subscription System
+  subscription_id?: string; // ID da assinatura recorrente (Asaas)
+  subscription_status?: string; // ACTIVE, EXPIRED, etc.
+  mercadopago_customer_id?: string;
+}
+
+export interface AffiliateLog {
+  id: string;
+  affiliate_id: string;
+  source_user_id?: string;
+  amount: number;
+  description: string;
+  created_at: string;
+  source_email?: string; // Enriched field
 }
 
 export interface Log {
@@ -41,14 +69,25 @@ export interface Log {
   usuario_id: string;
   acao: string;
   modulo: string;
+  // FIX: Replaced 'jsonb' with 'any' as 'jsonb' is a PostgreSQL type, not a TypeScript type.
+  detalhes?: any;
   data: string;
-  user_email?: string; // Optional: for display purposes
-  detalhes?: Record<string, any>; // For audit trail
+  user_email?: string;
 }
 
-export type AdminView = 'dashboard' | 'users' | 'news' | 'payments' | 'multi_ia_system' | 'logs';
+export type AdminView = 'dashboard' | 'users' | 'news' | 'payments' | 'multi_ia_system' | 'logs' | 'plans' | 'docs' | 'security' | 'popups' | 'feedbacks' | 'notifications_push' | 'tool_settings' | 'white_label_settings' | 'crm';
 
-export type TransactionStatus = 'pending' | 'approved' | 'failed';
+export interface AllowedDomain {
+  id: string;
+  domain: string;
+  created_at: string;
+}
+
+export interface SecuritySettings {
+  validationMode: 'strict_allowlist' | 'dns_validation';
+}
+
+export type TransactionStatus = 'pending' | 'approved' | 'failed' | 'refunded';
 export type PaymentMethod = 'pix' | 'card';
 
 export interface Transaction {
@@ -58,17 +97,32 @@ export interface Transaction {
   metodo: PaymentMethod;
   status: TransactionStatus;
   data: string;
+  external_id?: string; // Mercado Pago ID, Asaas ID
+  metadata?: { // Dados extras
+    item_type?: 'plan' | 'credits';
+    item_id?: string; // ID do plano ou pacote de créditos
+    provider?: string; // Ex: 'mercado_pago', 'asaas'
+    description?: string; // Descrição do item comprado
+    plan_id?: string; // ID do plano, se for compra de plano
+    credits_amount?: number; // Quantidade de créditos, se for compra de créditos
+    // Mercado Pago specific
+    payment_method_id?: string; // e.g., 'visa'
+    issuer_id?: string; // e.g., '24' for Visa
+    installments?: number;
+    // Asaas specific
+    card_token_id?: string;
+    customer_id?: string; // Asaas customer ID
+    // Any other relevant data
+    [key: string]: any;
+  };
   user?: {
     email: string;
   };
 }
 
-// --- NEW PAYMENT SETTINGS TYPES ---
-
 export interface GatewayConfig {
   enabled: boolean;
-  publicKey: string;
-  secretKey: string; // Generic name for Access Token or Secret Key
+  publicKey: string; 
 }
 
 export interface CreditPackage {
@@ -83,11 +137,10 @@ export interface PaymentSettings {
   gateways: {
     stripe: GatewayConfig;
     mercadoPago: GatewayConfig;
+    asaas: GatewayConfig; 
   };
   packages: CreditPackage[];
 }
-
-// --- NEW MULTI-AI SYSTEM TYPES ---
 
 export interface AIPlatform {
   enabled: boolean;
@@ -127,7 +180,173 @@ export interface AILog {
   tokens: number;
   custo: number;
   data: string;
-  user?: { // For joining with user table
+  user?: { 
     email: string;
   };
+}
+
+// --- FEEDBACK TYPES ---
+export interface FeedbackData {
+  rating: number;
+  comment: string;
+}
+
+// Nova interface para Feedbacks do Sistema (Depoimentos)
+export interface SystemFeedback {
+  id: string;
+  user_id: string;
+  content: string;
+  rating: number;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+  user?: {
+    full_name: string;
+    email: string;
+  };
+}
+
+// --- WORDPRESS INTEGRATION ---
+export interface WordPressConfig {
+  siteUrl: string;
+  username: string;
+  applicationPassword: string;
+  isConnected: boolean;
+}
+
+// --- ANALYTICS INTEGRATION ---
+export interface AnalyticsConfig {
+  measurementId: string; // G-XXXXXXXXXX
+  isConnected: boolean;
+}
+
+// --- N8N / WEBHOOK INTEGRATION ---
+export interface N8nConfig {
+  webhookUrl: string;
+  autoSend: boolean; // Se true, envia automaticamente após gerar
+  isConnected: boolean;
+}
+
+// --- POPUP SYSTEM ---
+export interface Popup {
+  id: string;
+  title: string;
+  content: string;
+  type: 'text' | 'image' | 'video';
+  media_url?: string;
+  style: {
+    background_color: string;
+    text_color: string;
+    button_color: string;
+    button_text_color: string;
+    theme?: 'default' | 'dark_gold';
+  };
+  trigger_settings: {
+    delay: number; // segundos
+    frequency: 'once' | 'always' | 'daily';
+    button_link?: string; // Link do botão de ação
+    button_text?: string; // Texto do botão
+  };
+  is_active: boolean;
+  created_at?: string;
+}
+
+// --- DEVELOPER API ---
+export interface ApiKey {
+  id: string;
+  user_id?: string;
+  name: string;
+  key_prefix: string; // Mostramos apenas o começo ou fim
+  full_key?: string; // Usado apenas na criação para mostrar uma vez
+  created_at: string;
+  last_used_at?: string;
+  status: 'active' | 'revoked';
+}
+
+// --- NOTIFICATION SYSTEM ---
+export interface AppNotification {
+  id: string;
+  user_id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  is_read: boolean;
+  action_link?: string;
+  created_at: string;
+}
+
+// --- GLOBAL TOOL SETTINGS ---
+export interface ToolSetting {
+  key: ServiceKey;
+  enabled: boolean;
+}
+
+// --- WHITE LABEL SETTINGS ---
+export interface WhiteLabelSettings {
+  appName: string;
+  appTagline: string;
+  logoTextPart1: string;
+  logoTextPart2: string;
+  primaryColorHex: string;
+  secondaryColorHex: string;
+  tertiaryColorHex: string;
+  faviconUrl: string;
+  ogImageUrl: string;
+  wordpressPluginName: string;
+  copyrightText: string;
+  appVersion: string;
+  dashboardTitle: string; 
+  
+  landingPageEnabled: boolean; 
+  heroSectionTitle: string;
+  heroSectionSubtitle: string;
+  heroCtaPrimaryText: string;
+  heroCtaPrimaryLink: string;
+  heroCtaSecondaryText: string;
+  heroCtaSecondaryLink: string;
+  featureSectionTitle: string;
+  featureSectionSubtitle: string;
+  landingPageFeatures: Array<{ id: string; icon: string, title: string, description: string, color: string, bgColor: string }>;
+  pricingSectionTitle: string;
+  pricingSectionSubtitle: string;
+  landingPageFooterLinks: Array<{ id: string; text: string, link: string }>;
+  
+  guestMarketingFooterTitle: string;
+  guestMarketingFooterSubtitle: string;
+  guestMarketingFooterCtaText: string;
+  guestMarketingFooterCtaLink: string;
+}
+
+// --- CRM & MARKETING TYPES ---
+// Updated to match SQL Schema: contacts, conversations, messages
+
+export interface ChatContact {
+  id: string;
+  phone: string;
+  name?: string;
+  created_at?: string;
+}
+
+export interface ChatConversation {
+  id: string;
+  contact_id: string;
+  last_message?: string;
+  last_message_at?: string;
+  unread_count: number;
+  created_at: string;
+  contact?: ChatContact; // Join result
+}
+
+export interface ChatMessage {
+  id: string;
+  conversation_id: string;
+  direction: 'in' | 'out';
+  body: string;
+  created_at: string;
+}
+
+export interface AiSettings {
+  user_id?: string;
+  enabled: boolean;
+  temperature: number;
+  system_prompt: string;
 }

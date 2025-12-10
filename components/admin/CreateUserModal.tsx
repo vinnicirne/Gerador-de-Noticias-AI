@@ -1,5 +1,8 @@
+
+
 import React, { useState, useEffect } from 'react';
 import { UserRole } from '../../types';
+// FIX: Imported CreateUserPayload from adminService
 import { CreateUserPayload } from '../../services/adminService';
 
 interface CreateUserModalProps {
@@ -7,7 +10,7 @@ interface CreateUserModalProps {
   onClose: () => void;
 }
 
-export const CreateUserModal: React.FC<CreateUserModalProps> = ({ onSave, onClose }) => {
+export function CreateUserModal({ onSave, onClose }: CreateUserModalProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');

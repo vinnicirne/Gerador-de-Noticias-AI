@@ -1,107 +1,106 @@
-// FIX: Import `Type` for defining the response schema.
-import { GoogleGenAI, Type } from "@google/genai";
-import { NewsType, NewsArticle, Source } from '../types';
 
-if (!process.env.API_KEY) {
-  throw new Error("API_KEY environment variable not set");
+import { ServiceKey } from '../types/plan.types';
+import { Source } from '../types'; 
+import { supabase } from './supabaseClient';
+import { getUserPreferences, saveGenerationResult } from './memoryService';
+
+// Define a comprehensive type for all possible options for content generation
+export interface GenerateContentOptions {
+  theme?: string;
+  primaryColor?: string;
+  aspectRatio?: string;
+  imageStyle?: string;
+  platform?: string;
+  voice?: string;
+  // Curriculum options
+  template?: string;
+  personalInfo?: { name: string; email: string; phone: string; linkedin: string; portfolio: string };
+  summary?: string;
+  experience?: { title: string; company: string; dates: string; description: string }[];
+  education?: { degree: string; institution: string; dates: string; description: string }[];
+  skills?: string[];
+  projects?: { name: string; description: string; technologies: string }[];
+  certifications?: string[];
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-// FIX: Updated prompt to request plain text with a specific structure (Title on first line)
-// instead of JSON, which is not reliable when using googleSearch tool.
-const generateCurrentNewsPrompt = (topic: string): string => `
-  Atue como um jornalista experiente. Escreva uma notícia detalhada e imparcial sobre "${topic}", focando estritamente nos eventos e desenvolvimentos das últimas 48 horas.
+export const generateCreativeContent = async (
+    prompt: string, 
+    mode: ServiceKey,
+    userId?: string,
+    generateAudio?: boolean,
+    // FIX: Updated the type of 'options' to the new comprehensive interface
+    options?: GenerateContentOptions
+): Promise<{ text: string, audioBase64: string | null, sources?: Source[] }> => {
   
-  Sua resposta DEVE seguir estritamente a seguinte estrutura:
-  - A PRIMEIRA linha DEVE conter apenas o título da notícia.
-  - As linhas SEGUINTES DEVEM conter o corpo da notícia, com parágrafos bem estruturados.
-
-  NÃO inclua formatação JSON ou Markdown. Apenas texto puro.
-`;
-
-const generatePredictiveNewsPrompt = (topic: string): string => `
-  Atue como um analista de tendências e especialista em futurologia. Escreva uma notícia preditiva sobre "${topic}".
-  Baseie sua análise em dados atuais, tendências e possíveis desdobramentos lógicos. Deixe claro que se trata de uma análise especulativa, mas fundamentada.
-
-  Sua resposta deve seguir a estrutura de uma análise preditiva:
-  1.  **Título:** Um título que indique a natureza preditiva da notícia (ex: "O que esperar...", "Análise Preditiva:", "Cenários para...").
-  2.  **Corpo da Notícia:** Desenvolva o conteúdo explorando os possíveis cenários, os fatores que influenciam o futuro do evento e as possíveis consequências.
-
-  Formate a resposta como um objeto JSON com as chaves "title" e "content". Não adicione markdown ('''json ... ''') ao redor do JSON.
-`;
-
-export const generateNews = async (topic: string, newsType: NewsType): Promise<Omit<NewsArticle, 'id'>> => {
-  const model = 'gemini-2.5-flash';
-  let prompt: string;
-  let config: any = {};
-  let isJsonOutput = false;
-
-  if (newsType === NewsType.CURRENT) {
-    prompt = generateCurrentNewsPrompt(topic);
-    config = { tools: [{ googleSearch: {} }] };
-  } else {
-    prompt = generatePredictiveNewsPrompt(topic);
-    isJsonOutput = true;
-    // FIX: Use responseMimeType and responseSchema to enforce JSON output for predictive news.
-    // This is more reliable than relying on prompt instructions alone.
-    config = {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          title: { type: Type.STRING },
-          content: { type: Type.STRING },
-        },
-        required: ['title', 'content'],
-      }
-    };
-  }
-  
-  const response = await ai.models.generateContent({
-    model: model,
-    contents: prompt,
-    config: config,
-  });
-
-  if (!response.text) {
-    throw new Error('A API não retornou conteúdo.');
-  }
-
-  let parsedContent: { title: string; content: string; };
-
-  // FIX: Differentiated parsing logic. Parse JSON only when expected.
-  // For current news, parse the plain text response based on the structured prompt.
-  if (isJsonOutput) {
+  let userMemory = '';
+  if (userId) {
     try {
-      parsedContent = JSON.parse(response.text);
-    } catch (error) {
-      console.error("Failed to parse JSON from Gemini response:", response.text);
-      throw new Error("A resposta da API não estava no formato JSON esperado.");
+        userMemory = await getUserPreferences(userId);
+    } catch (e) {
+        console.warn('Falha ao buscar memória do usuário, prosseguindo sem.', e);
     }
-  } else {
-    const lines = response.text.trim().split('\n');
-    const title = lines.shift() || `Notícia sobre: ${topic}`;
-    const content = lines.join('\n').trim();
-
-    if (!content) {
-        throw new Error("A resposta da API para notícias atuais não retornou conteúdo no corpo da notícia.");
-    }
-    
-    parsedContent = { title, content };
   }
 
+  try {
+      const { data, error } = await supabase.functions.invoke('generate-content', {
+          body: {
+              prompt,
+              mode,
+              userId,
+              generateAudio,
+              options,
+              userMemory
+          }
+      });
 
-  const sources: Source[] = response.candidates?.[0]?.groundingMetadata?.groundingChunks
-    ?.filter((chunk: any) => chunk.web)
-    .map((chunk: any) => ({
-      uri: chunk.web.uri,
-      title: chunk.web.title,
-    })) || [];
-  
-  return {
-    titulo: parsedContent.title,
-    conteudo: parsedContent.content,
-    sources: sources.length > 0 ? sources : undefined,
-  };
+      if (error) {
+          console.error("Erro na Edge Function generate-content:", error);
+          throw new Error(error.message || "Erro ao conectar com o serviço de IA.");
+      }
+
+      if (data.error) {
+          throw new Error(data.error);
+      }
+
+      // Se userId existir, salva o resultado no histórico local (memória)
+      if (userId && data.text) {
+          saveGenerationResult(userId, `Modo: ${mode}\nPrompt: ${prompt}\nResultado: ${data.text.substring(0, 500)}...`);
+      }
+
+      return {
+          text: data.text,
+          audioBase64: data.audioBase64 || null,
+          sources: data.sources || []
+      };
+
+  } catch (err: any) {
+      console.error("Falha na geração de conteúdo:", err);
+      throw new Error(`Falha na geração: ${err.message}`);
+  }
 };
+
+export const analyzeLeadQuality = async (lead: any): Promise<{ score: number, justification: string }> => {
+    // Construct prompt
+    const prompt = `Analise o seguinte lead e atribua uma pontuação de 0 a 100 com base na qualidade e completude dos dados.
+    Nome: ${lead.name}
+    Empresa: ${lead.company}
+    Email: ${lead.email}
+    Telefone: ${lead.phone}
+    Cargo/Notes: ${lead.notes}
+    
+    Retorne APENAS um JSON no formato: { "score": number, "justification": "string curta" }`;
+
+    try {
+        // Casting 'lead_analysis' as ServiceKey as it is an internal mode handled by backend
+        const { text } = await generateCreativeContent(prompt, 'lead_analysis' as ServiceKey); 
+        // Parse JSON from text
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            return JSON.parse(jsonMatch[0]);
+        }
+        return { score: 50, justification: "Análise inconclusiva (Formato inválido)." };
+    } catch (e) {
+        console.error("Erro na análise de lead:", e);
+        return { score: 0, justification: "Erro na análise." };
+    }
+}

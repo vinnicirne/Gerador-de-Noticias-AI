@@ -1,15 +1,45 @@
 
-import React from 'react';
 
-export const Loader: React.FC = () => {
+
+import React from 'react';
+import { ServiceKey } from '../types/plan.types';
+
+interface LoaderProps {
+  mode?: ServiceKey;
+}
+
+export function Loader({ mode }: LoaderProps) {
+  
+  const getLoadingMessage = (currentMode?: ServiceKey) => {
+    switch (currentMode) {
+        case 'landingpage_generator':
+            return { title: 'Codificando sua Landing Page...', subtitle: 'Estruturando HTML, aplicando Tailwind CSS e design responsivo.' };
+        case 'image_generation':
+            return { title: 'Renderizando Arte IA...', subtitle: 'Otimizando prompt e processando pixels em alta definição.' };
+        case 'text_to_speech':
+            return { title: 'Sintetizando Voz Neural...', subtitle: 'Convertendo texto em áudio com entonação natural.' };
+        case 'copy_generator':
+            return { title: 'Escrevendo Copy Persuasiva...', subtitle: 'Aplicando gatilhos mentais e otimizando para conversão.' };
+        case 'prompt_generator':
+            return { title: 'Engenharia de Prompt...', subtitle: 'Refinando instruções para obter o melhor resultado da IA.' };
+        case 'canva_structure':
+            return { title: 'Renderizando Design Editável...', subtitle: 'Montando layout visual, camadas e tipografia para Social Media.' };
+        case 'news_generator':
+            return { title: 'Analisando dados e gerando sua notícia...', subtitle: 'Cruzando fatos recentes e estruturando o artigo.' };
+        default:
+            return { title: 'Gerando Conteúdo Inteligente...', subtitle: 'A IA está trabalhando no seu pedido.' };
+    }
+  };
+
+  const message = getLoadingMessage(mode);
+  // Add a return statement to render the loading UI
   return (
-    <div className="flex flex-col items-center justify-center p-8 text-center text-green-400">
-      <svg className="animate-spin h-10 w-10 text-green-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-      </svg>
-      <p className="text-lg font-semibold">Analisando dados e gerando sua notícia...</p>
-      <p className="text-sm text-gray-500">Isso pode levar alguns instantes.</p>
+    <div className="mt-8 p-6 bg-white rounded-xl shadow-md border border-gray-200 text-center animate-fade-in">
+        <div className="flex items-center justify-center mb-4">
+            <i className="fas fa-spinner fa-spin text-4xl text-[var(--brand-primary)]"></i>
+        </div>
+        <h3 className="text-xl font-bold text-[var(--brand-secondary)] mb-2">{message.title}</h3>
+        <p className="text-gray-500 text-sm">{message.subtitle}</p>
     </div>
   );
-};
+}

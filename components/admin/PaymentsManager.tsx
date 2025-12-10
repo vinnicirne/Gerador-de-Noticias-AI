@@ -1,10 +1,16 @@
+
+
 import React, { useState } from 'react';
 import { BillingTable } from './BillingTable';
 import { PaymentsConfig } from './PaymentsConfig';
 
 type ActiveTab = 'billing' | 'config';
 
-export const PaymentsManager: React.FC = () => {
+interface PaymentsManagerProps {
+    dataVersion?: number; // Propcional se não for passado pelo pai
+}
+
+export function PaymentsManager({ dataVersion = 0 }: PaymentsManagerProps) {
   const [activeTab, setActiveTab] = useState<ActiveTab>('billing');
 
   const tabClasses = (tabName: ActiveTab) =>
@@ -32,9 +38,9 @@ export const PaymentsManager: React.FC = () => {
 
       {/* Tab Content */}
       <div>
-        {activeTab === 'billing' && <BillingTable />}
+        {activeTab === 'billing' && <BillingTable dataVersion={dataVersion} />}
         {activeTab === 'config' && <PaymentsConfig />}
       </div>
     </div>
   );
-};
+}

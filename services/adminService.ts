@@ -1,905 +1,751 @@
-/**************************************************************************************************
- *                                                                                                *
- *   !!! ATENÇÃO: ERRO DE TABELA NÃO ENCONTRADA? EXECUTE O SCRIPT SQL ABAIXO PRIMEIRO !!!          *
- *                                                                                                *
- *   Este arquivo contém o script SQL necessário para configurar o banco de dados.              *
- *   Se você está vendo erros como "Could not find the table 'public.profiles'", é porque        *
- *   este script ainda não foi executado.                                                         *
- *                                                                                                *
- *   COMO EXECUTAR:                                                                               *
- *   1. Acesse seu projeto no painel do Supabase (app.supabase.com).                              *
- *   2. No menu esquerdo, vá para "SQL Editor".                                                   *
- *   3. Clique em "+ New query".                                                                  *
- *   4. Copie TODO o conteúdo do bloco de comentário abaixo (da linha que começa com              *
- *      `/* -- SEÇÃO 0:` até o final do comentário `*/`).                                         *
- *   5. Cole no editor SQL e clique em "RUN".                                                     *
- *                                                                                                *
- **************************************************************************************************/
 
-/*
-  ================================================================================================
-  ==           SCRIPT DE CONFIGURAÇÃO DO BANCO DE DADOS - GDN_IA v4 (View-Based)             ==
-  ================================================================================================
-  
-  Este script prepara o banco de dados Supabase com uma arquitetura robusta, utilizando uma
-  tabela 'profiles' para dados de usuário e uma view 'users' para leitura combinada com
-  os dados de autenticação. Esta é uma prática recomendada para evitar conflitos e
-  organizar melhor os dados.
-  
-  Execute este script UMA VEZ no Editor SQL do seu projeto Supabase.
-  Acesse: Database -> SQL Editor -> New query.
-  
-  ================================================================================================
-*/
 
-/*
--- SEÇÃO 0: LIMPEZA E PREPARAÇÃO
--- Remove a view 'users' e a tabela 'profiles' antigas para garantir uma instalação limpa.
-DROP VIEW IF EXISTS public.users;
-DROP TABLE IF EXISTS public.profiles;
+import { api } from './api';
+import { logger } from './loggerService';
+// FIX: Imported ToolSetting and WhiteLabelSettings from types
+import { User, Log, UserRole, NewsStatus, NewsArticle, UserStatus, Transaction, PaymentSettings, MultiAISettings, AILog, CreditPackage, AIModel, Plan, AllowedDomain, SecuritySettings, AffiliateLog, Popup, ToolSetting, WhiteLabelSettings } from '../types';
+import { GUEST_ID, CREATOR_SUITE_MODES } from '../constants';
+import { supabase } from './supabaseClient'; // Import supabase directly for complex queries
 
--- SEÇÃO 1: TIPOS DE DADOS PERSONALIZADOS (ENUMs)
-DO $$ BEGIN CREATE TYPE public.user_role AS ENUM ('user', 'editor', 'admin', 'super_admin'); EXCEPTION WHEN duplicate_object THEN null; END $$;
-DO $$ BEGIN CREATE TYPE public.user_status AS ENUM ('active', 'inactive', 'banned'); EXCEPTION WHEN duplicate_object THEN null; END $$;
-DO $$ BEGIN CREATE TYPE public.news_type AS ENUM ('current', 'predictive'); EXCEPTION WHEN duplicate_object THEN null; END $$;
-DO $$ BEGIN CREATE TYPE public.news_status AS ENUM ('pending', 'approved', 'rejected'); EXCEPTION WHEN duplicate_object THEN null; END $$;
-DO $$ BEGIN CREATE TYPE public.payment_method AS ENUM ('pix', 'card'); EXCEPTION WHEN duplicate_object THEN null; END $$;
-DO $$ BEGIN CREATE TYPE public.transaction_status AS ENUM ('pending', 'approved', 'failed'); EXCEPTION WHEN duplicate_object THEN null; END $$;
-DO $$ BEGIN CREATE TYPE public.ai_platform AS ENUM ('gemini', 'openai', 'claude'); EXCEPTION WHEN duplicate_object THEN null; END $$;
+// Helper for client-side pagination since API might return all data
+const paginate = (items: any[], page: number, limit: number) => {
+  const from = (page - 1) * limit;
+  const to = from + limit;
+  return items.slice(from, to);
+};
 
--- SEÇÃO 2: CRIAÇÃO DAS TABELAS
--- Tabela de perfis para armazenar dados adicionais do usuário.
-CREATE TABLE IF NOT EXISTS public.profiles (
-    id uuid NOT NULL PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    full_name text,
-    "role" public.user_role NOT NULL DEFAULT 'user',
-    status public.user_status NOT NULL DEFAULT 'active',
-    credits integer NOT NULL DEFAULT 0,
-    plan text,
-    created_at timestamptz DEFAULT now()
-);
-
--- Demais tabelas agora referenciam 'profiles'
-CREATE TABLE IF NOT EXISTS public.news (
-    id bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-    autor_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
-    titulo text NOT NULL,
-    conteudo text NOT NULL,
-    sources jsonb,
-    tipo public.news_type NOT NULL,
-    status public.news_status NOT NULL DEFAULT 'pending',
-    criado_em timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS public.logs (
-    id bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-    usuario_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
-    acao text NOT NULL,
-    modulo text,
-    detalhes jsonb,
-    "data" timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS public.transactions (
-    id bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-    usuario_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    valor numeric(10, 2) NOT NULL,
-    metodo public.payment_method NOT NULL,
-    status public.transaction_status NOT NULL DEFAULT 'pending',
-    "data" timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS public.pacotes_credito (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    nome text NOT NULL,
-    quantidade integer NOT NULL,
-    preco numeric(10, 2) NOT NULL,
-    ativo boolean NOT NULL DEFAULT false
-);
-
-CREATE TABLE IF NOT EXISTS public.settings (
-    chave text PRIMARY KEY,
-    valor jsonb,
-    categoria text
-);
-INSERT INTO public.settings (chave, valor, categoria)
-VALUES ('multi_ai_platforms', '{"gemini": {"enabled": true, "apiKey": "", "costPerMillionTokens": 0.50, "maxTokens": 8192}, "openai": {"enabled": false, "apiKey": "", "costPerMillionTokens": 1.00, "maxTokens": 4096}, "claude": {"enabled": false, "apiKey": "", "costPerMillionTokens": 1.50, "maxTokens": 100000}}'::jsonb, 'multi_ia')
-ON CONFLICT (chave) DO NOTHING;
-
-CREATE TABLE IF NOT EXISTS public.modelos_ia (
-    id text PRIMARY KEY,
-    nome text NOT NULL,
-    plataforma public.ai_platform NOT NULL,
-    contexto_maximo integer,
-    capacidades jsonb,
-    status text NOT NULL DEFAULT 'inactive',
-    custo_token numeric(10, 4)
-);
-
-CREATE TABLE IF NOT EXISTS public.consumo_ia (
-    id bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-    usuario_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    modelo_id text NOT NULL REFERENCES public.modelos_ia(id),
-    tokens integer NOT NULL,
-    custo numeric(10, 6) NOT NULL,
-    "data" timestamptz NOT NULL DEFAULT now()
-);
-
--- SEÇÃO 3: CRIAÇÃO DA VIEW 'users'
--- Esta view combina auth.users e public.profiles para ser a fonte de leitura de dados do usuário.
-CREATE OR REPLACE VIEW public.users AS
-SELECT
-    u.id,
-    u.email,
-    p.full_name,
-    p.role,
-    p.status,
-    p.credits,
-    p.plan
-FROM auth.users u
-LEFT JOIN public.profiles p ON u.id = p.id;
-
--- SEÇÃO 4: POLÍTICAS DE SEGURANÇA (ROW LEVEL SECURITY - RLS)
--- A função is_admin agora lê da tabela 'profiles'.
-CREATE OR REPLACE FUNCTION is_admin()
-RETURNS boolean AS $$
-BEGIN
-    RETURN (SELECT "role" FROM public.profiles WHERE id = auth.uid()) IN ('admin', 'super_admin');
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Habilita RLS em todas as tabelas relevantes.
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.news ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.logs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.pacotes_credito ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.modelos_ia ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.consumo_ia ENABLE ROW LEVEL SECURITY;
-
--- Políticas para a tabela 'profiles'
-DROP POLICY IF EXISTS "Allow admin full access" ON public.profiles;
-CREATE POLICY "Allow admin full access" ON public.profiles FOR ALL USING (is_admin());
-DROP POLICY IF EXISTS "Allow user to read own profile" ON public.profiles;
-CREATE POLICY "Allow user to read own profile" ON public.profiles FOR SELECT USING (id = auth.uid());
-
--- Políticas para as outras tabelas (sem grandes mudanças, pois usam is_admin() ou auth.uid())
-DROP POLICY IF EXISTS "Allow admin full access on news" ON public.news;
-CREATE POLICY "Allow admin full access on news" ON public.news FOR ALL USING (is_admin());
-DROP POLICY IF EXISTS "Allow authenticated users to create news" ON public.news;
-CREATE POLICY "Allow authenticated users to create news" ON public.news FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-DROP POLICY IF EXISTS "Allow author to see their own news" ON public.news;
-CREATE POLICY "Allow author to see their own news" ON public.news FOR SELECT USING (autor_id = auth.uid());
-DROP POLICY IF EXISTS "Allow admin full access" ON public.logs;
-CREATE POLICY "Allow admin full access" ON public.logs FOR ALL USING (is_admin());
-DROP POLICY IF EXISTS "Allow admin full access" ON public.transactions;
-CREATE POLICY "Allow admin full access" ON public.transactions FOR ALL USING (is_admin());
-DROP POLICY IF EXISTS "Allow admin full access" ON public.settings;
-CREATE POLICY "Allow admin full access" ON public.settings FOR ALL USING (is_admin());
-DROP POLICY IF EXISTS "Allow admin full access" ON public.modelos_ia;
-CREATE POLICY "Allow admin full access" ON public.modelos_ia FOR ALL USING (is_admin());
-DROP POLICY IF EXISTS "Allow admin full access" ON public.consumo_ia;
-CREATE POLICY "Allow admin full access" ON public.consumo_ia FOR ALL USING (is_admin());
-DROP POLICY IF EXISTS "Allow authenticated read access to packages" ON public.pacotes_credito;
-CREATE POLICY "Allow authenticated read access to packages" ON public.pacotes_credito FOR SELECT USING (auth.role() = 'authenticated');
-DROP POLICY IF EXISTS "Allow admin full access on packages" ON public.pacotes_credito;
-CREATE POLICY "Allow admin full access on packages" ON public.pacotes_credito FOR ALL USING (is_admin());
-
--- SEÇÃO 5: FUNÇÕES (Remote Procedure Calls - RPC)
--- create_new_user agora insere em 'profiles' e retorna o usuário da view 'users'.
-CREATE OR REPLACE FUNCTION public.create_new_user(
-    p_email text, p_password text, p_full_name text, p_role text, p_credits integer, p_status text, p_plan text DEFAULT NULL
-)
-RETURNS json LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE
-  auth_user_id uuid;
-  new_user_profile json;
-BEGIN
-  -- Cria o usuário em auth.users. Se já existir, apenas recupera o ID.
-  SELECT id INTO auth_user_id FROM auth.users WHERE email = p_email;
-  IF auth_user_id IS NULL THEN
-    auth_user_id := (auth.admin_create_user(p_email, p_password, '{"email_confirm": false}'::jsonb)).id;
-  END IF;
-
-  -- Insere ou atualiza o perfil em public.profiles
-  INSERT INTO public.profiles (id, full_name, "role", status, credits, plan)
-  VALUES (auth_user_id, p_full_name, p_role::public.user_role, p_status::public.user_status, p_credits, p_plan)
-  ON CONFLICT (id) DO UPDATE SET full_name = excluded.full_name, "role" = excluded.role, status = excluded.status, credits = excluded.credits, plan = excluded.plan;
-
-  -- Retorna o usuário completo da view 'users' como JSON.
-  SELECT to_json(u) INTO new_user_profile FROM public.users u WHERE u.id = auth_user_id;
-  RETURN new_user_profile;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public.get_active_users_7d()
-RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$
-  SELECT count(DISTINCT user_id) FROM auth.sessions WHERE created_at >= now() - interval '7 days';
-$$;
-
--- get_daily_platform_usage agora lê da tabela 'profiles' para novos usuários.
-CREATE OR REPLACE FUNCTION public.get_daily_platform_usage()
-RETURNS TABLE(report_date text, news_count bigint, new_users_count bigint) LANGUAGE sql SECURITY DEFINER AS $$
-  WITH date_series AS (
-    SELECT generate_series((now() - interval '6 days')::date, now()::date, '1 day'::interval)::date AS report_date
-  )
-  SELECT ds.report_date::text, coalesce(n.count, 0) AS news_count, coalesce(u.count, 0) AS new_users_count
-  FROM date_series ds
-  LEFT JOIN (SELECT criado_em::date AS "date", count(*) AS count FROM public.news GROUP BY "date") n ON ds.report_date = n."date"
-  LEFT JOIN (SELECT created_at::date AS "date", count(*) AS count FROM public.profiles GROUP BY "date") u ON ds.report_date = u."date"
-  ORDER BY ds.report_date ASC;
-$$;
-
--- SEÇÃO 6: GATILHO DE CRIAÇÃO DE PERFIL
--- O gatilho agora insere na tabela 'profiles' quando um novo usuário se registra.
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-BEGIN
-  INSERT INTO public.profiles (id, full_name, "role", status, credits)
-  VALUES (new.id, split_part(new.email, '@', 1), 'user', 'active', 10);
-  RETURN new;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
-*/
-import { supabase } from './supabaseClient';
-// FIX: Added AIPlatformSettings to the import list to resolve a type error.
-import { User, Log, UserRole, NewsStatus, NewsArticle, UserStatus, Transaction, TransactionStatus, PaymentMethod, PaymentSettings, MultiAISettings, AILog, CreditPackage, AIModel, AIPlatformSettings } from '../types';
-
-// --- NEW USER MANAGEMENT FUNCTIONS ---
-
+// --- USER MANAGEMENT TYPES ---
 export interface CreateUserPayload {
-  email: string;
-  password?: string;
-  full_name: string;
-  role: UserRole;
-  credits: number;
-  plan?: string;
+    email: string;
+    password?: string; // Optional for admin-created users
+    full_name: string;
+    role: UserRole;
+    credits: number;
 }
 
-/**
- * Creates a new user in authentication and in the 'profiles' table.
- * It uses a secure RPC function (`create_new_user`) for robust creation.
- * @param payload New user data.
- * @param adminUserId ID of the admin performing the action.
- */
-export const createUser = async (
-  payload: CreateUserPayload,
-  adminUserId: string
-): Promise<User> => {
-  const { data: newUser, error: rpcError } = await supabase.rpc('create_new_user', {
-    p_email: payload.email,
-    p_password: payload.password,
-    p_full_name: payload.full_name,
-    p_role: payload.role,
-    p_credits: payload.credits,
-    p_status: 'active',
-    p_plan: payload.plan
-  });
+// --- DOMAIN BLACKLIST ---
+const DOMAIN_BLACKLIST = [
+    'teste.com',
+    'teste.com.br',
+    'test.com',
+    'example.com',
+    'exemplo.com',
+    'email.com',
+    'usuario.com',
+    'tempmail.com',
+    '10minutemail.com',
+    'mailinator.com',
+    'yopmail.com',
+    'throwawaymail.com'
+];
 
-  if (rpcError) {
-    console.error(`RPC call to 'create_new_user' failed:`, rpcError.message || rpcError);
-    if (rpcError.message.includes('duplicate key') || rpcError.message.includes('already exists')) {
-      throw new Error('Um usuário com este email já existe.');
-    }
-    if (rpcError.message.includes('function public.create_new_user does not exist')) {
-        throw new Error("Falha ao criar usuário: A função 'create_new_user' não foi encontrada. Execute o script SQL em services/adminService.ts.");
-    }
-    throw new Error(`Falha ao criar usuário via RPC: ${rpcError.message}.`);
-  }
+// --- NOTIFICATIONS SYSTEM (ADMIN) ---
 
-  if (!newUser) {
-      throw new Error("A criação do usuário não retornou um perfil, mas não gerou erro.");
-  }
-  
-  const { error: logError } = await supabase.from('logs').insert({
-    usuario_id: adminUserId,
-    acao: 'create_user',
-    modulo: 'Usuários',
-    detalhes: {
-      new_user_email: payload.email,
-      role_assigned: payload.role,
-      initial_credits: payload.credits,
-    },
-  });
+export const sendSystemNotification = async (
+    title: string,
+    message: string,
+    type: 'info' | 'success' | 'warning' | 'error',
+    targetUserId: string | 'all',
+    actionLink?: string,
+    adminId?: string
+) => {
+    try {
+        if (targetUserId === 'all') {
+            // Envio em Massa (Broadcast)
+            // 1. Busca todos os IDs de usuários ativos
+            const { data: users, error: usersError } = await api.select('app_users', { status: 'active' });
+            
+            if (usersError || !users) throw new Error("Erro ao buscar lista de usuários para envio em massa.");
 
-  if (logError) {
-    console.error(`Failed to create audit log for user creation:`, logError.message);
-  }
+            if (users.length === 0) return { success: true, count: 0 };
 
-  return newUser as User;
-};
+            // 2. Prepara o payload em lote
+            const notifications = users.map((u: any) => ({
+                user_id: u.id,
+                title,
+                message,
+                type,
+                action_link: actionLink || null,
+                is_read: false,
+                created_at: new Date().toISOString()
+            }));
 
+            // 3. Insere em lote (Supabase suporta insert de array)
+            // Nota: Se a lista for muito grande (>1000), ideal seria quebrar em chunks, mas para MVP está ok.
+            const { error } = await api.insert('notifications', notifications);
+            if (error) throw new Error(error);
 
-interface GetUsersParams {
-  role?: UserRole | 'all';
-  status?: UserStatus | 'all';
-  page?: number;
-  limit?: number;
-}
+            logger.info(adminId || 'system', 'Sistema', 'send_broadcast_notification', { title, count: users.length });
+            return { success: true, count: users.length };
 
-interface GetUsersResult {
-    users: User[];
-    count: number;
-}
+        } else {
+            // Envio Individual
+            const { error } = await api.insert('notifications', {
+                user_id: targetUserId,
+                title,
+                message,
+                type,
+                action_link: actionLink || null,
+                is_read: false
+            });
 
-/**
- * Fetches users with filtering and pagination from the single 'users' view.
- * Returns a list of users and the total count for pagination.
- */
-export const getUsers = async ({
-  role = 'all',
-  status = 'all',
-  page = 1,
-  limit = 10,
-}: GetUsersParams): Promise<GetUsersResult> => {
-  let query = supabase
-    .from('users')
-    .select('id, email, full_name, role, status, credits, plan', { count: 'exact' });
-
-  if (role !== 'all') {
-    query = query.eq('role', role);
-  }
-  if (status !== 'all') {
-    query = query.eq('status', status);
-  }
-
-  const offset = (page - 1) * limit;
-  query = query.range(offset, offset + limit - 1);
-
-  const { data, error, count } = await query;
-
-  if (error) {
-    console.error('Error fetching users:', error.message);
-    throw error;
-  }
-
-  return { users: data || [], count: count ?? 0 };
-};
-
-interface UpdateUserPayload {
-  role?: UserRole;
-  credits?: number;
-  status?: UserStatus;
-  plan?: string;
-}
-
-/**
- * Updates a user's data in the 'profiles' table and creates an audit log.
- * @param targetUserId ID of the user to be modified.
- * @param updates Object with the fields to be updated.
- * @param adminUserId ID of the admin performing the action.
- */
-export const updateUser = async (
-  targetUserId: string,
-  updates: UpdateUserPayload,
-  adminUserId: string
-): Promise<User> => {
-  const { data: currentUser, error: fetchError } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', targetUserId)
-    .single();
-
-  if (fetchError || !currentUser) {
-    throw new Error('Usuário a ser atualizado não encontrado.');
-  }
-
-  const { error: updateError } = await supabase
-    .from('profiles')
-    .update(updates)
-    .eq('id', targetUserId);
-    
-  if (updateError) throw updateError;
-  
-  const { data: updatedUser, error: refetchError } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', targetUserId)
-    .single();
-
-  if (refetchError || !updatedUser) throw new Error('Falha ao recarregar usuário após atualização.');
-
-
-  // Create audit log for changes
-  const changes: Record<string, { from: any; to: any }> = {};
-  Object.keys(updates).forEach(key => {
-    const typedKey = key as keyof UpdateUserPayload;
-    if (updates[typedKey] !== currentUser[typedKey]) {
-      changes[typedKey] = { from: currentUser[typedKey], to: updates[typedKey] };
-    }
-  });
-
-  if (Object.keys(changes).length > 0) {
-    await supabase.from('logs').insert({
-      usuario_id: adminUserId,
-      acao: 'update_user',
-      modulo: 'Usuários',
-      detalhes: { target_user_id: targetUserId, changes },
-    });
-  }
-
-  return updatedUser;
-};
-
-
-// --- NEWS & LOGS FUNCTIONS ---
-
-interface GetNewsParams {
-  status?: NewsStatus | 'all';
-  page?: number;
-  limit?: number;
-}
-
-interface GetNewsResult {
-  news: NewsArticle[];
-  count: number;
-}
-
-/**
- * Busca notícias com informações do autor, com suporte a filtros e paginação.
- */
-export const getNewsWithAuthors = async ({
-  status = 'all',
-  page = 1,
-  limit = 10,
-}: GetNewsParams): Promise<GetNewsResult> => {
-  let query = supabase
-    .from('news')
-    .select('*, author:users(email)', { count: 'exact' });
-
-  if (status !== 'all') {
-    query = query.eq('status', status);
-  }
-
-  const offset = (page - 1) * limit;
-  query = query.range(offset, offset + limit - 1).order('criado_em', { ascending: false });
-
-  const { data, error, count } = await query;
-
-  if (error) {
-    console.error('Error fetching news with authors:', error.message);
-    throw error;
-  }
-
-  return { news: (data as NewsArticle[]) || [], count: count ?? 0 };
-};
-
-export const updateNewsStatus = async (newsId: number, status: NewsStatus, adminUserId: string): Promise<NewsArticle> => {
-    const { data, error } = await supabase
-        .from('news')
-        .update({ status })
-        .eq('id', newsId)
-        .select()
-        .single();
-    
-    if (error) {
-        console.error('Error updating news status:', error.message);
-        throw error;
-    }
-
-    const { error: logError } = await supabase.from('logs').insert({
-        usuario_id: adminUserId,
-        acao: `update_news_status`,
-        modulo: 'Notícias',
-        detalhes: {
-            news_id: newsId,
-            new_status: status,
+            if (error) throw new Error(error);
+            logger.info(adminId, 'Sistema', 'send_user_notification', { title, targetUserId });
+            return { success: true, count: 1 };
         }
-    });
-
-    if (logError) {
-        console.error('Failed to create audit log for news status update:', logError.message);
+    } catch (e: any) {
+        console.error("Erro ao enviar notificação:", e);
+        throw e;
     }
-
-    return data;
 };
 
-export const updateNewsArticle = async (newsId: number, titulo: string, conteudo: string, adminUserId: string): Promise<NewsArticle> => {
-    const { data: currentNews, error: fetchError } = await supabase
-        .from('news')
-        .select('titulo, conteudo')
-        .eq('id', newsId)
-        .single();
+// --- AFFILIATE SYSTEM ---
+
+export const generateAffiliateCode = async (userId: string, fullName: string): Promise<string> => {
+    let base = 'PARTNER';
     
-    if (fetchError || !currentNews) {
-        throw new Error("Could not find news article to update.");
+    if (fullName) {
+        base = fullName
+            .split(' ')[0]
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, "")
+            .toUpperCase()
+            .replace(/[^A-Z]/g, '');
+    }
+    
+    if (!base || base.length < 2) {
+        base = 'PARTNER';
     }
 
-    const { data, error } = await supabase
-        .from('news')
-        .update({ titulo, conteudo })
-        .eq('id', newsId)
-        .select()
-        .single();
+    let code = '';
+    let isUnique = false;
+    let attempts = 0;
 
-    if (error) {
-        console.error('Error updating news article:', error.message);
-        throw error;
-    }
-
-    const changes: Record<string, any> = {};
-    if (titulo !== currentNews.titulo) {
-        changes.title = { from: currentNews.titulo, to: titulo };
-    }
-    if (conteudo !== currentNews.conteudo) {
-        changes.content = "updated";
-    }
-
-    if (Object.keys(changes).length > 0) {
-        const { error: logError } = await supabase.from('logs').insert({
-            usuario_id: adminUserId,
-            acao: 'update_news_content',
-            modulo: 'Notícias',
-            detalhes: {
-                news_id: newsId,
-                changes,
-            },
-        });
-        if (logError) {
-            console.error('Failed to log news article update:', logError.message);
+    while (!isUnique && attempts < 5) {
+        const random = Math.floor(1000 + Math.random() * 9000);
+        code = `${base}-${random}`;
+        
+        const { data, error } = await api.select('app_users', { affiliate_code: code });
+        
+        if (!error && (!data || data.length === 0)) {
+            isUnique = true;
         }
+        attempts++;
+        
+        if (!isUnique) await new Promise(r => setTimeout(r, 200));
     }
 
-    return data;
-};
-
-export interface GetLogsParams {
-  page?: number;
-  limit?: number;
-  action?: string;
-  module?: string;
-  searchText?: string;
-}
-
-export interface GetLogsResult {
-  logs: Log[];
-  count: number;
-}
-
-export const getLogs = async ({
-  page = 1,
-  limit = 15,
-  action,
-  module,
-  searchText,
-}: GetLogsParams): Promise<GetLogsResult> => {
-  let query = supabase
-    .from('logs')
-    .select('*, user_email:users(email)', { count: 'exact' });
-
-  if (action && action !== 'all') {
-    query = query.eq('acao', action);
-  }
-
-  if (module && module !== 'all') {
-    query = query.eq('modulo', module);
-  }
-  
-  if (searchText) {
-    query = query.ilike('acao', `%${searchText}%`);
-  }
-
-  const offset = (page - 1) * limit;
-  query = query.range(offset, offset + limit - 1).order('data', { ascending: false });
-
-  const { data, error, count } = await query;
-
-  if (error) {
-    console.error('Error fetching logs:', error.message);
-    throw error;
-  }
-  
-  return {
-    logs: data?.map((log: any) => ({
-      ...log,
-      user_email: log.user_email?.email || 'N/A',
-    })) || [],
-    count: count ?? 0,
-  };
-};
-
-// --- BILLING FUNCTIONS ---
-
-export interface GetTransactionsParams {
-  status?: TransactionStatus | 'all';
-  method?: PaymentMethod | 'all';
-  startDate?: string;
-  endDate?: string;
-  page?: number;
-  limit?: number;
-}
-
-export interface GetTransactionsResult {
-  transactions: Transaction[];
-  count: number;
-}
-
-export const getTransactions = async ({
-  status = 'all',
-  method = 'all',
-  startDate,
-  endDate,
-  page = 1,
-  limit = 15,
-}: GetTransactionsParams): Promise<GetTransactionsResult> => {
-  let query = supabase
-    .from('transactions') 
-    .select('*, user:users(email)', { count: 'exact' });
-
-  if (status !== 'all') query = query.eq('status', status);
-  if (method !== 'all') query = query.eq('metodo', method);
-  if (startDate) query = query.gte('data', `${startDate}T00:00:00.000Z`);
-  if (endDate) query = query.lte('data', `${endDate}T23:59:59.999Z`);
-  
-  const offset = (page - 1) * limit;
-  query = query.range(offset, offset + limit - 1).order('data', { ascending: false });
-
-  const { data, error, count } = await query;
-
-  if (error) {
-    console.error('Error fetching transactions:', error.message);
-    throw new Error('Falha ao buscar transações. Verifique se a view "transactions" existe e as permissões RLS estão corretas.');
-  }
-  
-  return { transactions: (data as any[]) || [], count: count ?? 0 };
-};
-
-export const getApprovedRevenueInRange = async (startDate?: string, endDate?: string): Promise<number> => {
-    let query = supabase
-      .from('transactions')
-      .select('valor')
-      .eq('status', 'approved');
-      
-    if (startDate) query = query.gte('data', `${startDate}T00:00:00.000Z`);
-    if (endDate) query = query.lte('data', `${endDate}T23:59:59.999Z`);
+    if (!isUnique) {
+        code = `${base}-${Date.now().toString().slice(-4)}`;
+    }
     
-    const { data, error } = await query;
-
-    if (error) {
-        console.error('Error fetching approved revenue:', error.message);
-        throw error;
-    }
-
-    const total = data?.reduce((sum, transaction) => sum + transaction.valor, 0) || 0;
-    return total;
+    await api.update('app_users', { affiliate_code: code }, { id: userId });
+    
+    logger.info(userId, 'Usuários', 'generate_affiliate_code', { code });
+    
+    return code;
 };
 
-// --- PAYMENT SETTINGS FUNCTIONS ---
+export const getAffiliateStats = async (userId: string) => {
+    // 1. Get Logs (Transactions that generated commission)
+    const { data: logsData } = await api.select('affiliate_logs', { affiliate_id: userId });
+    
+    // 2. Get Referral Count
+    const { data: referrals } = await api.select('app_users', { referred_by: userId });
+    
+    // 3. Enrich logs with source email using Optimized Fetch (Only fetch related users)
+    let enrichedLogs: AffiliateLog[] = [];
+    
+    if (logsData && logsData.length > 0) {
+        // Extract unique source user IDs from logs
+        const sourceIds = [...new Set(logsData.map((l: any) => l.source_user_id).filter(Boolean))];
+        const userMap = new Map();
+        
+        if (sourceIds.length > 0) {
+             // OTIMIZAÇÃO: Busca apenas os usuários que estão nos logs usando o novo filtro 'in'
+             const { data: users } = await api.select('app_users', {}, { inColumn: 'id', inValues: sourceIds });
+             
+             if(users) {
+                 users.forEach((u:any) => {
+                     userMap.set(u.id, u.email);
+                 });
+             }
+        }
 
-const SETTINGS_TABLE = 'settings';
-
-export const getPaymentSettings = async (): Promise<PaymentSettings> => {
-    // Fetch gateway settings (new format)
-    const { data: gatewaySettings, error: gatewaysError } = await supabase
-        .from(SETTINGS_TABLE)
-        .select('chave, valor')
-        .eq('categoria', 'gateway');
-
-    // Fetch credit packages (unchanged)
-    const { data: packagesData, error: packagesError } = await supabase
-        .from('pacotes_credito')
-        .select('*')
-        .order('preco', { ascending: true });
-
-    if (gatewaysError) {
-        console.error('Error fetching payment gateways:', gatewaysError.message);
-        throw new Error('Falha ao carregar as configurações de gateways de pagamento.');
+        enrichedLogs = logsData.map((l: any) => ({
+            ...l,
+            source_email: userMap.get(l.source_user_id) || 'Usuário (Removido)'
+        }));
+        
+        // Sort descending
+        enrichedLogs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     }
-    if (packagesError) {
-        console.error('Error fetching credit packages:', packagesError.message);
-        throw new Error('Falha ao carregar os pacotes de crédito.');
-    }
 
-    // Reconstruct the gateways object from individual rows
-    const gateways: PaymentSettings['gateways'] = {
-        stripe: { enabled: false, publicKey: '', secretKey: '' },
-        mercadoPago: { enabled: false, publicKey: '', secretKey: '' },
+    return {
+        logs: enrichedLogs,
+        referralCount: referrals ? referrals.length : 0,
+        totalEarnings: enrichedLogs.reduce((acc, curr) => acc + Number(curr.amount), 0)
     };
-
-    gatewaySettings?.forEach(setting => {
-        const { chave, valor } = setting;
-        const isTrue = String(valor).toLowerCase() === 'true';
-
-        if (chave === 'stripe_enabled') gateways.stripe.enabled = isTrue;
-        else if (chave === 'stripe_publicKey') gateways.stripe.publicKey = valor;
-        else if (chave === 'stripe_secretKey') gateways.stripe.secretKey = valor;
-        else if (chave === 'mercadoPago_enabled') gateways.mercadoPago.enabled = isTrue;
-        else if (chave === 'mercadoPago_publicKey') gateways.mercadoPago.publicKey = valor;
-        else if (chave === 'mercadoPago_secretKey') gateways.mercadoPago.secretKey = valor;
-    });
-    
-    const packages = packagesData ?? [];
-
-    return { gateways, packages };
 };
 
-export const saveGatewaySettings = async (gateways: PaymentSettings['gateways'], adminUserId: string): Promise<void> => {
-    const gatewayRows = [
-        { chave: 'stripe_enabled', valor: String(gateways.stripe.enabled), categoria: 'gateway' },
-        { chave: 'stripe_publicKey', valor: gateways.stripe.publicKey, categoria: 'gateway' },
-        { chave: 'stripe_secretKey', valor: gateways.stripe.secretKey, categoria: 'gateway' },
-        { chave: 'mercadoPago_enabled', valor: String(gateways.mercadoPago.enabled), categoria: 'gateway' },
-        { chave: 'mercadoPago_publicKey', valor: gateways.mercadoPago.publicKey, categoria: 'gateway' },
-        { chave: 'mercadoPago_secretKey', valor: gateways.mercadoPago.secretKey, categoria: 'gateway' },
-    ];
+// --- CONFIGURAÇÕES GERAIS ---
 
-    const { error } = await supabase.from(SETTINGS_TABLE).upsert(gatewayRows);
+const getConfig = async <T>(key: string, defaultValue: T): Promise<T> => {
+    const { data, error } = await api.select('system_config', { key });
+    if (error || !data || data.length === 0) return defaultValue;
+    return data[0].value as T;
+};
 
+const setConfig = async <T>(key: string, value: T, adminId: string) => {
+    const existing = await api.select('system_config', { key });
+    if (existing.data && existing.data.length > 0) {
+        await api.update('system_config', { value, updated_by: adminId, updated_at: new Date().toISOString() }, { key });
+    } else {
+        await api.insert('system_config', { key, value, updated_by: adminId, updated_at: new Date().toISOString() });
+    }
+};
+
+// --- POPUPS SYSTEM ---
+
+export const getPopups = async (onlyActive = false): Promise<Popup[]> => {
+    const filters = onlyActive ? { is_active: true } : {};
+    const { data, error } = await api.select('system_popups', filters);
+    
     if (error) {
-        console.error('Error saving gateway settings:', error.message);
-        throw new Error('Falha ao salvar as configurações de gateways.');
-    }
-
-    const { error: logError } = await supabase.from('logs').insert({
-        usuario_id: adminUserId,
-        acao: 'update_gateway_settings',
-        modulo: 'Pagamentos',
-        detalhes: { updated_gateways: Object.keys(gateways) }
-    });
-
-    if (logError) {
-        console.error('Failed to log gateway settings update:', logError.message);
-    }
-};
-
-export const saveCreditPackages = async (packages: CreditPackage[], adminUserId: string): Promise<void> => {
-    const { error } = await supabase
-        .from('pacotes_credito')
-        .upsert(packages);
-
-    if (error) {
-        console.error('Error saving credit packages:', error.message);
-        throw new Error('Falha ao salvar os pacotes de crédito.');
-    }
-    
-    const { error: logError } = await supabase.from('logs').insert({
-        usuario_id: adminUserId,
-        acao: 'update_credit_packages',
-        modulo: 'Pagamentos',
-        detalhes: { package_count: packages.length }
-    });
-
-    if (logError) {
-        console.error('Failed to log credit packages update:', logError.message);
-    }
-};
-
-
-// --- MULTI-AI SETTINGS FUNCTIONS ---
-
-const MULTI_AI_PLATFORMS_KEY = 'multi_ai_platforms';
-
-export const getMultiAISettings = async (): Promise<MultiAISettings> => {
-    // FIX: Changed column name from 'key' to 'chave' to match the database schema.
-    const { data: platformsData, error: platformsError } = await supabase
-        .from(SETTINGS_TABLE)
-        .select('valor')
-        .eq('chave', MULTI_AI_PLATFORMS_KEY)
-        .maybeSingle(); // FIX: Use maybeSingle to avoid errors on missing settings row.
-
-    const { data: modelsData, error: modelsError } = await supabase
-        .from('modelos_ia')
-        .select('*');
-
-    // FIX: Simplified error check since maybeSingle() won't throw a "0 rows" error.
-    if (platformsError) {
-        console.error('Error fetching multi-AI platforms:', platformsError.message);
-        throw new Error('Falha ao carregar as configurações de plataformas de IA.');
-    }
-    if (modelsError) {
-        console.error('Error fetching AI models:', modelsError.message);
-        throw new Error('Falha ao carregar os modelos de IA.');
-    }
-    
-    // FIX: Changed property access from .value to .valor.
-    const platforms: AIPlatformSettings = platformsData?.valor ?? {
-        gemini: { enabled: true, apiKey: '', costPerMillionTokens: 0.50, maxTokens: 8192 },
-        openai: { enabled: false, apiKey: '', costPerMillionTokens: 1.00, maxTokens: 4096 },
-        claude: { enabled: false, apiKey: '', costPerMillionTokens: 1.50, maxTokens: 100000 },
-    };
-
-    const models: AIModel[] = (modelsData ?? []).map(m => ({
-        ...m,
-        ativo: m.status === 'active' // Convert string status to boolean
-    }));
-
-    return { platforms, models };
-};
-
-
-export const updateMultiAISettings = async (settings: MultiAISettings, adminUserId: string): Promise<MultiAISettings> => {
-    // 1. Update Platforms in settings table
-    // FIX: Changed column name from 'key' to 'chave' in the upsert payload.
-    const { error: platformsError } = await supabase
-        .from(SETTINGS_TABLE)
-        .upsert({ chave: MULTI_AI_PLATFORMS_KEY, valor: settings.platforms });
-    
-    if (platformsError) {
-        console.error('Error updating multi-AI platforms:', platformsError.message);
-        throw new Error('Falha ao salvar as configurações de plataformas de IA.');
-    }
-
-    // 2. Update AI Models in modelos_ia table
-    const modelsToUpsert = settings.models.map(m => ({
-        ...m,
-        status: m.ativo ? 'active' : 'inactive' // Convert boolean back to string status
-    }));
-    const { error: modelsError } = await supabase
-        .from('modelos_ia')
-        .upsert(modelsToUpsert);
-
-    if (modelsError) {
-        console.error('Error updating AI models:', modelsError.message);
-        throw new Error('Falha ao salvar os modelos de IA.');
-    }
-    
-    // 3. Log the update
-    const { error: logError } = await supabase.from('logs').insert({
-        usuario_id: adminUserId,
-        acao: 'update_multi_ai_settings',
-        modulo: 'Sistema Multi-IA',
-        detalhes: {
-            updated_platforms: Object.keys(settings.platforms),
-            model_count: settings.models.length,
+        // Conversão segura do erro para string
+        const errorMsg = typeof error === 'string' ? error : (error.message || JSON.stringify(error));
+        
+        // Se a tabela não existir (inda não foi criada via SQL), retorna array vazio para não quebrar a UI
+        if(
+            errorMsg.includes('does not exist') || 
+            errorMsg.includes('404') || 
+            errorMsg.includes('Could not find the table') ||
+            errorMsg.includes('relation "public.system_popups" does not exist')
+        ) {
+            console.warn("Tabela system_popups não encontrada. Retornando lista vazia.");
+            return [];
         }
-    });
-
-    if (logError) {
-        console.error('Failed to create audit log for multi-AI settings update:', logError.message);
+        throw new Error(errorMsg);
     }
+    
+    return data || [];
+};
+
+export const createPopup = async (popup: Omit<Popup, 'id' | 'created_at'>, adminId: string) => {
+    const { error } = await api.insert('system_popups', popup);
+    if (error) throw new Error(error);
+    logger.info(adminId, 'Sistema', 'create_popup', { title: popup.title });
+};
+
+export const updatePopup = async (id: string, updates: Partial<Popup>, adminId: string) => {
+    const { error } = await api.update('system_popups', updates, { id });
+    if (error) throw new Error(error);
+    logger.info(adminId, 'Sistema', 'update_popup', { id, updates });
+};
+
+export const deletePopup = async (id: string, adminId: string) => {
+    const { error } = await api.delete('system_popups', { id });
+    if (error) throw new Error(error);
+    logger.warn(adminId, 'Sistema', 'delete_popup', { id });
+};
+
+// --- GLOBAL TOOL SETTINGS ---
+
+const DEFAULT_TOOL_SETTINGS: ToolSetting[] = CREATOR_SUITE_MODES.map(mode => ({
+    key: mode.value,
+    enabled: true, // Por padrão, todas as ferramentas estão ativadas
+}));
+
+export const getGlobalToolSettings = async (): Promise<ToolSetting[]> => {
+    let settings = await getConfig<ToolSetting[]>('tool_settings', DEFAULT_TOOL_SETTINGS);
+    
+    // Ensure all current modes are represented, even if newly added to CREATOR_SUITE_MODES
+    const currentModeKeys = new Set(CREATOR_SUITE_MODES.map(m => m.value));
+    const existingKeys = new Set(settings.map(s => s.key));
+
+    // Add new modes not present in saved settings
+    for (const mode of CREATOR_SUITE_MODES) {
+        if (!existingKeys.has(mode.value)) {
+            settings.push({ key: mode.value, enabled: true });
+        }
+    }
+    // Remove old modes that are no longer in CREATOR_SUITE_MODES
+    settings = settings.filter(s => currentModeKeys.has(s.key));
 
     return settings;
 };
 
-// --- AI LOGS FUNCTIONS ---
+export const updateGlobalToolSettings = async (settings: ToolSetting[], adminId: string) => {
+    await setConfig('tool_settings', settings, adminId);
+    logger.info(adminId, 'Planos', 'update_global_tool_settings', { tool_count: settings.length });
+};
 
-export interface GetAILogsParams {
-  page?: number;
-  limit?: number;
+// --- WHITE LABEL SETTINGS ---
+const DEFAULT_WHITE_LABEL_SETTINGS: WhiteLabelSettings = {
+    appName: "GDN_IA",
+    appTagline: "Creator Suite",
+    logoTextPart1: "GDN",
+    logoTextPart2: "_IA",
+    primaryColorHex: "#F39C12",
+    secondaryColorHex: "#263238",
+    tertiaryColorHex: "#10B981",
+    faviconUrl: "https://cdn-icons-png.flaticon.com/512/16806/16806607.png",
+    ogImageUrl: "https://gdn.ia/default-og.jpg",
+    wordpressPluginName: "GDN_IA - Poster Pro",
+    copyrightText: "GDN_IA",
+    appVersion: "1.0.9",
+    dashboardTitle: "Creator Suite",
+    // New defaults for landing page and guest footer
+    landingPageEnabled: true,
+    heroSectionTitle: "Crie Notícias, Imagens e Sites 10x Mais Rápido com IA.",
+    heroSectionSubtitle: "A plataforma completa para criadores, jornalistas e agências. Esqueça o bloqueio criativo e produza conteúdo profissional em segundos.",
+    heroCtaPrimaryText: "Começar Agora",
+    heroCtaPrimaryLink: "dashboard",
+    heroCtaSecondaryText: "Ver Demo",
+    heroCtaSecondaryLink: "login",
+    featureSectionTitle: "Tudo o que você precisa em um só lugar",
+    featureSectionSubtitle: "Substitua dezenas de ferramentas caras por uma única suíte inteligente.",
+    landingPageFeatures: [
+        { id: '1', icon: "fa-newspaper", color: "text-green-600", bgColor: "bg-green-100", title: "Gerador de Notícias", description: "Artigos jornalísticos completos, imparciais e otimizados para SEO, baseados em fatos reais e recentes." },
+        { id: '2', icon: "fa-paint-brush", color: "text-purple-600", bgColor: "bg-purple-100", title: "Studio de Arte IA", description: "Crie imagens ultra-realistas, logotipos e ilustrações apenas descrevendo o que você imagina." },
+        { id: '3', icon: "fa-laptop-code", color: "text-blue-600", bgColor: "bg-blue-100", title: "Criador de Sites", description: "Gere Landing Pages e Sites Institucionais completos com código HTML/Tailwind pronto para uso." },
+        { id: '4', icon: "fa-microphone-lines", color: "text-orange-600", bgColor: "bg-orange-100", title: "Texto para Voz", description: "Narre seus artigos e vídeos com vozes neurais ultra-realistas em português." },
+        { id: '5', icon: "fa-bolt", color: "text-yellow-600", bgColor: "bg-yellow-100", title: "Automação N8N", description: "Conecte seu conteúdo diretamente ao seu WordPress, redes sociais ou planilhas via Webhooks." },
+        { id: '6', icon: "fa-search", color: "text-pink-600", bgColor: "bg-pink-100", title: "SEO Automático", description: "Nossa IA analisa e otimiza seu texto para rankear no topo do Google automaticamente." },
+    ],
+    pricingSectionTitle: "Planos acessíveis para todos",
+    pricingSectionSubtitle: "Comece grátis e escale conforme sua necessidade.",
+    landingPageFooterLinks: [
+        { id: '1', text: "Termos", link: "terms" },
+        { id: '2', text: "Privacidade", link: "privacy" },
+        { id: '3', text: "Sobre", link: "about" },
+    ],
+    guestMarketingFooterTitle: "Gostou do teste?",
+    guestMarketingFooterSubtitle: "Crie sua conta gratuita agora e desbloqueie ferramentas avançadas como Geração de Imagens e Sites Completos.",
+    guestMarketingFooterCtaText: "Criar Conta Grátis",
+    guestMarketingFooterCtaLink: "login",
+};
+
+export const getWhiteLabelSettings = async (): Promise<WhiteLabelSettings> => {
+    return getConfig<WhiteLabelSettings>('white_label_settings', DEFAULT_WHITE_LABEL_SETTINGS);
+};
+
+export const updateWhiteLabelSettings = async (settings: WhiteLabelSettings, adminId: string) => {
+    await setConfig('white_label_settings', settings, adminId);
+    logger.info(adminId, 'Sistema', 'update_white_label_settings', settings);
+};
+
+
+// --- USERS ---
+
+export interface GetUsersParams {
+  page: number;
+  limit: number;
+  role: UserRole | 'all';
+  status: UserStatus | 'all';
 }
 
-export interface GetAILogsResult {
-  logs: AILog[];
-  count: number;
-}
+export const getUsers = async ({ page, limit, role, status }: GetUsersParams): Promise<{ users: User[], count: number }> => {
+  const filters: any = {};
+  if (role !== 'all') filters.role = role;
+  if (status !== 'all') filters.status = status;
 
-/**
- * Fetches AI usage logs with pagination, joining user data directly in the query.
- */
-export const getAILogs = async ({
-  page = 1,
-  limit = 15,
-}: GetAILogsParams): Promise<GetAILogsResult> => {
-  // REFACTOR: Changed from a manual two-step fetch to a direct join with Supabase
-  // for better performance and code consistency with other services.
-  let query = supabase
-    .from('consumo_ia')
-    .select('*, user:users(email)', { count: 'exact' });
-  
-  const offset = (page - 1) * limit;
-  query = query.range(offset, offset + limit - 1).order('data', { ascending: false });
-
-  const { data, error, count } = await query;
+  // Use the direct supabase client for exact count and filtering
+  const { data, count, error } = await supabase
+        .from('app_users')
+        .select('*', { count: 'exact' })
+        .match(filters);
 
   if (error) {
-    console.error('Error fetching AI logs with user join:', error.message);
-    throw new Error('Falha ao buscar logs de uso da IA. Verifique se a tabela "consumo_ia" e a relação com "users" existem.');
+      console.error("Erro ao buscar usuários:", error);
+      throw error;
   }
 
-  // Supabase join already structures the data; we just ensure it fits our type by
-  // flattening the nested user object.
-  const enrichedLogs = data?.map((log: any) => ({
-    ...log,
-    user: {
-      email: log.user?.email || 'N/A',
-    },
-  })) || [];
+  let usersList = data || [];
+  
+  // Enriquecer com dados de créditos
+  const userIds = usersList.map(u => u.id);
+  const { data: creditsData } = await api.select('user_credits', {}, { inColumn: 'user_id', inValues: userIds });
+  const creditsMap = new Map<string, number>();
+  if(creditsData) {
+      creditsData.forEach((c: any) => creditsMap.set(c.user_id, c.credits));
+  }
 
-  return { logs: enrichedLogs as AILog[], count: count ?? 0 };
+  const enrichedUsers: User[] = usersList.map((u: any) => ({
+      ...u,
+      credits: creditsMap.get(u.id) ?? 0 // Default to 0 if no credit entry
+  }));
+
+  enrichedUsers.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
+
+  if (page !== undefined && limit !== undefined) {
+      return { users: paginate(enrichedUsers, page, limit), count: count || 0 };
+  }
+  return { users: enrichedUsers, count: count || 0 };
+};
+
+export const createUser = async (payload: CreateUserPayload, adminId: string) => {
+    const { email, password, full_name, role, credits } = payload;
+    
+    // First, create the user in Auth.supabase
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true, // Auto-confirm email
+        user_metadata: { full_name, role, credits } // Pass initial metadata
+    });
+
+    if (authError) {
+        console.error("Erro ao criar usuário no Auth:", authError);
+        throw new Error(authError.message || "Falha ao criar usuário de autenticação.");
+    }
+    if (!authData.user) {
+        throw new Error("Usuário de autenticação não retornado após criação.");
+    }
+
+    // The handle_new_user trigger will populate app_users and user_credits
+    // We just need to ensure the role and credits are correctly set if the trigger doesn't cover all cases.
+    // For now, assume trigger handles initial setup, but we might need explicit updates.
+
+    // If initial credits or role are different from trigger defaults, update explicitly
+    await Promise.all([
+        api.update('app_users', { role, full_name }, { id: authData.user.id }),
+        api.update('user_credits', { credits }, { user_id: authData.user.id })
+    ]);
+
+    logger.info(adminId, 'Usuários', 'create_user', { newUserId: authData.user.id, email, role });
+    return authData.user;
+};
+
+export const updateUser = async (userId: string, updates: { role: UserRole, credits: number, status: UserStatus, full_name: string, plan: string }, adminId: string) => {
+    // Update app_users table
+    const { error: userError } = await api.update('app_users', { 
+        role: updates.role, 
+        status: updates.status, 
+        full_name: updates.full_name,
+        plan: updates.plan
+    }, { id: userId });
+    if (userError) throw userError;
+
+    // Update user_credits table
+    const { error: creditsError } = await api.update('user_credits', { credits: updates.credits }, { user_id: userId });
+    if (creditsError) throw creditsError;
+
+    logger.info(adminId, 'Usuários', 'update_user', { userId, updates });
+};
+
+export const deleteUser = async (userId: string, adminId: string) => {
+    // Deleta o usuário da tabela `app_users` e `user_credits` (cascade se configurado)
+    // Deleta o usuário do Auth Supabase (admin API)
+    const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+
+    if (authError) {
+        console.error("Erro ao deletar usuário no Auth:", authError);
+        throw new Error(authError.message || "Falha ao deletar usuário de autenticação.");
+    }
+    
+    // Logs são importantes para auditoria, então não deletamos aqui, apenas o perfil
+    logger.warn(adminId, 'Usuários', 'delete_user', { userId });
+};
+
+// --- NEWS ---
+
+export interface GetNewsParams {
+    page: number;
+    limit: number;
+    status: NewsStatus | 'all';
+}
+
+export const getNewsWithAuthors = async ({ page, limit, status }: GetNewsParams): Promise<{ news: NewsArticle[], count: number }> => {
+  const filters: any = {};
+  if (status !== 'all') filters.status = status;
+
+  // Use direct supabase client for exact count and filtering for news
+  const { data, count, error } = await supabase
+        .from('news')
+        .select('*', { count: 'exact' })
+        .match(filters);
+
+  if (error) {
+      console.error("Erro ao buscar notícias:", error);
+      throw error;
+  }
+
+  let newsList = data || [];
+  
+  // Optimization: Fetch author emails for all relevant news articles in one go
+  const authorIds = [...new Set(newsList.map((n: any) => n.author_id).filter(Boolean))];
+  let authorMap = new Map();
+  if (authorIds.length > 0) {
+      const { data: users } = await api.select('app_users', {}, { inColumn: 'id', inValues: authorIds });
+      if(users) users.forEach((u: any) => authorMap.set(u.id, u.email));
+  }
+
+  const enrichedNews: NewsArticle[] = newsList.map((n: any) => ({
+      ...n,
+      author: { email: authorMap.get(n.author_id) || 'Desconhecido' }
+  }));
+
+  enrichedNews.sort((a, b) => new Date(b.criado_em || '').getTime() - new Date(a.criado_em || '').getTime());
+
+  if (page !== undefined && limit !== undefined) {
+      return { news: paginate(enrichedNews, page, limit), count: count || 0 };
+  }
+  return { news: enrichedNews, count: count || 0 };
+};
+
+export const updateNewsStatus = async (newsId: number, status: NewsStatus, adminId: string) => {
+  const { error } = await api.update('news', { status }, { id: newsId });
+  if (error) throw error;
+  logger.info(adminId, 'Notícias', 'update_news_status', { newsId, status });
+};
+
+export const updateNewsArticle = async (id: number, titulo: string, conteudo: string, adminId: string) => {
+  const { error } = await api.update('news', { titulo, conteudo }, { id });
+  if (error) throw error;
+  logger.info(adminId, 'Notícias', 'update_news_content', { newsId: id });
+};
+
+// --- LOGS ---
+
+export const getLogs = async ({ page, limit, module, action, searchText }: any) => {
+  const filters: any = {};
+  if (module !== 'all') filters.modulo = module;
+  if (action !== 'all') filters.acao = action;
+
+  // Use direct supabase client for exact count and filtering for logs
+  const { data, count, error } = await supabase
+        .from('logs')
+        .select('*', { count: 'exact' })
+        .match(filters);
+
+  if (error) {
+      console.error("Erro ao buscar logs:", error);
+      throw error;
+  }
+
+  let logsList = data || [];
+
+  if (searchText) {
+      const lowerSearch = searchText.toLowerCase();
+      logsList = logsList.filter((l: any) => 
+          (l.acao && l.acao.toLowerCase().includes(lowerSearch)) || 
+          (l.modulo && l.modulo.toLowerCase().includes(lowerSearch))
+      );
+  }
+
+  // Optimized log user fetching
+  const userIds = [...new Set(logsList.map((l: any) => l.usuario_id).filter(Boolean))];
+  const userMap = new Map();
+  if (userIds.length > 0) {
+      // Filter out GUEST_ID before querying app_users
+      const realUserIds = userIds.filter((id) => id !== GUEST_ID);
+      
+      if (realUserIds.length > 0) {
+          const { data: users } = await api.select('app_users', {}, { inColumn: 'id', inValues: realUserIds });
+          if(users) users.forEach((u: any) => userMap.set(u.id, u.email));
+      }
+  }
+
+  const enrichedLogs: Log[] = logsList.map((l: any) => {
+      let userEmail = 'Sistema';
+      if (l.usuario_id === GUEST_ID) {
+          userEmail = 'Visitante (Guest)';
+      } else {
+          userEmail = userMap.get(l.usuario_id) || (l.usuario_id ? 'Usuário (Removido)' : 'Sistema');
+      }
+      
+      return {
+          ...l,
+          user_email: userEmail
+      };
+  });
+
+  enrichedLogs.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+
+  return { logs: paginate(enrichedLogs, page, limit), count: count || 0 };
+};
+
+// --- PAYMENTS ---
+
+export const getTransactions = async ({ page, limit, status, method, startDate, endDate }: any) => {
+    const filters: any = {};
+    if (status !== 'all') filters.status = status;
+    if (method !== 'all') filters.metodo = method;
+
+    const { data, error } = await api.select('transactions', filters);
+    if (error) throw error;
+
+    let txList = data || [];
+
+    if (startDate) txList = txList.filter((t: any) => new Date(t.data) >= new Date(startDate));
+    if (endDate) txList = txList.filter((t: any) => new Date(t.data) <= new Date(endDate));
+
+    const userIds = [...new Set(txList.map((t: any) => t.usuario_id).filter(Boolean))];
+    const userMap = new Map();
+    if (userIds.length > 0) {
+        const { data: users } = await api.select('app_users', {}, { inColumn: 'id', inValues: userIds });
+        if(users) users.forEach((u: any) => userMap.set(u.id, u.email));
+    }
+
+    const enrichedTx: Transaction[] = txList.map((t: any) => ({
+        ...t,
+        user: { email: userMap.get(t.usuario_id) || 'Desconhecido' }
+    }));
+
+    enrichedTx.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+
+    return { transactions: paginate(enrichedTx, page, limit), count: enrichedTx.length };
+};
+
+export const getApprovedRevenueInRange = async (startDate: string, endDate: string) => {
+    const { data } = await api.select('transactions', { status: 'approved' });
+    if (!data) return 0;
+
+    let filtered = data;
+    if (startDate) filtered = filtered.filter((t: any) => new Date(t.data) >= new Date(startDate));
+    if (endDate) filtered = filtered.filter((t: any) => new Date(t.data) <= new Date(endDate));
+
+    return filtered.reduce((acc: number, curr: any) => acc + curr.valor, 0);
+};
+
+// --- SETTINGS & OTHERS ---
+
+export const getPaymentSettings = async (): Promise<PaymentSettings> => {
+    const defaults: PaymentSettings = {
+        // Removed secretKey from defaults for security
+        gateways: { 
+            stripe: { enabled: false, publicKey: '' }, 
+            mercadoPago: { enabled: false, publicKey: '' }, 
+            asaas: { enabled: false, publicKey: '' } 
+        },
+        packages: []
+    };
+    const saved = await getConfig<Partial<PaymentSettings>>('payment_settings', defaults);
+    return { ...defaults, ...saved, gateways: { ...defaults.gateways, ...(saved.gateways || {}) } } as PaymentSettings; // Cast para segurança
+};
+
+export const saveGatewaySettings = async (gateways: any, adminId: string) => {
+    const current = await getPaymentSettings();
+    await setConfig('payment_settings', { ...current, gateways }, adminId);
+    logger.info(adminId, 'Pagamentos', 'update_payment_settings', { updated: 'gateways' });
+};
+
+export const saveCreditPackages = async (packages: CreditPackage[], adminId: string) => {
+    const current = await getPaymentSettings();
+    await setConfig('payment_settings', { ...current, packages }, adminId);
+    logger.info(adminId, 'Pagamentos', 'update_payment_settings', { updated: 'packages', count: packages.length });
+};
+
+export const getMultiAISettings = async (): Promise<MultiAISettings> => {
+    return getConfig<MultiAISettings>('multi_ai_settings', {
+        platforms: { gemini: { enabled: true, apiKey: '', costPerMillionTokens: 0, maxTokens: 0 }, openai: { enabled: false, apiKey: '', costPerMillionTokens: 0, maxTokens: 0 }, claude: { enabled: false, apiKey: '', costPerMillionTokens: 0, maxTokens: 0 } },
+        models: []
+    });
+};
+
+export const updateMultiAISettings = async (settings: MultiAISettings, adminId: string) => {
+    await setConfig('multi_ai_settings', settings, adminId);
+    logger.info(adminId, 'Sistema Multi-IA', 'update_multi_ai_settings', { platforms: Object.keys(settings.platforms).filter(k => (settings.platforms as any)[k].enabled) });
+};
+
+export const getAILogs = async ({ page, limit }: { page: number, limit: number }) => {
+     const { data, error } = await api.select('ai_logs');
+     if (error) return { logs: [], count: 0 };
+     
+     const userIds = [...new Set((data || []).map((l: any) => l.usuario_id).filter(Boolean))];
+     const userMap = new Map();
+     if(userIds.length > 0) {
+         const { data: users } = await api.select('app_users', {}, { inColumn: 'id', inValues: userIds });
+         if(users) users.forEach((u: any) => userMap.set(u.id, u.email));
+     }
+
+     const enrichedLogs: AILog[] = (data || []).map((l: any) => ({
+         ...l,
+         user: { email: userMap.get(l.usuario_id) || 'N/A' }
+     }));
+     
+     enrichedLogs.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+     return { logs: paginate(enrichedLogs, page, limit), count: enrichedLogs.length };
+};
+
+export const getPlans = async (): Promise<Plan[]> => getConfig<Plan[]>('all_plans', []);
+export const savePlans = async (plans: Plan[], adminId: string) => {
+    await setConfig('all_plans', plans, adminId);
+    logger.info(adminId, 'Planos', 'update_plans_config', { plan_count: plans.length });
+};
+
+export const getAllowedDomains = async (): Promise<AllowedDomain[]> => {
+  const { data } = await api.select('allowed_domains');
+  return data || [];
+};
+
+export const addAllowedDomain = async (domain: string, adminId: string) => {
+  if (!domain.includes('.') || domain.includes('@')) throw new Error("Formato de domínio inválido.");
+  const { error } = await api.insert('allowed_domains', { domain: domain.toLowerCase() });
+  if (error) throw error;
+  logger.info(adminId, 'Segurança', 'add_allowed_domain', { domain });
+};
+
+export const removeAllowedDomain = async (id: string, domain: string, adminId: string) => {
+  const { error } = await api.delete('allowed_domains', { id });
+  if (error) throw error;
+  logger.warn(adminId, 'Segurança', 'remove_allowed_domain', { domain });
+};
+
+export const getSecuritySettings = async (): Promise<SecuritySettings> => getConfig<SecuritySettings>('security_settings', { validationMode: 'strict_allowlist' });
+export const updateSecuritySettings = async (settings: SecuritySettings, adminId: string) => {
+    await setConfig('security_settings', settings, adminId);
+    logger.info(adminId, 'Segurança', 'update_security_settings', settings);
+};
+
+export const isDomainAllowed = async (email: string): Promise<boolean> => {
+  const domain = email.split('@')[1]?.toLowerCase();
+  if (!domain || DOMAIN_BLACKLIST.includes(domain)) return false;
+  
+  try {
+      const { data } = await api.select('allowed_domains', { domain });
+      if (data && data.length > 0) return true;
+
+      const settings = await getSecuritySettings();
+      if (settings.validationMode === 'strict_allowlist') return false;
+      if (settings.validationMode === 'dns_validation') {
+          // Mock DNS check for frontend only environment
+          return true; 
+      }
+      return false;
+  } catch (e) {
+      return false;
+  }
+};
+
+export const searchUsers = async (searchTerm: string): Promise<User[]> => {
+    if (!searchTerm || searchTerm.length < 3) return [];
+
+    const { data, error } = await supabase
+        .from('app_users')
+        .select('id, email, full_name, role, status, plan, credits') // Select necessary fields
+        .or(`email.ilike.%${searchTerm}%,full_name.ilike.%${searchTerm}%,id.eq.${searchTerm}`); // Search across multiple fields
+
+    if (error) {
+        console.error("Error searching users:", error);
+        throw error;
+    }
+
+    let usersList = data || [];
+    
+    // Enrich with credits data if not already present (from the `select` above, it's not direct)
+    const userIds = usersList.map(u => u.id);
+    const { data: creditsData } = await api.select('user_credits', {}, { inColumn: 'user_id', inValues: userIds });
+    const creditsMap = new Map<string, number>();
+    if(creditsData) {
+        creditsData.forEach((c: any) => creditsMap.set(c.user_id, c.credits));
+    }
+
+    const enrichedUsers: User[] = usersList.map((u: any) => ({
+        ...u,
+        credits: creditsMap.get(u.id) ?? 0 // Default to 0 if no credit entry
+    }));
+
+    return enrichedUsers;
 };

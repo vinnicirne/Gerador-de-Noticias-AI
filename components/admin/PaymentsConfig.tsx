@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { getPaymentSettings, saveGatewaySettings, saveCreditPackages } from '../../services/adminService';
 import { useUser } from '../../contexts/UserContext';
@@ -5,25 +7,29 @@ import { PaymentSettings, CreditPackage, GatewayConfig } from '../../types';
 import { Toast } from './Toast';
 import { v4 as uuidv4 } from 'uuid';
 
-const ToggleSwitch: React.FC<{ enabled: boolean; onChange: (enabled: boolean) => void }> = ({ enabled, onChange }) => {
+interface ToggleSwitchProps {
+  enabled: boolean;
+  onChange: (enabled: boolean) => void;
+}
+
+function ToggleSwitch({ enabled, onChange }: ToggleSwitchProps) {
     return (
         <button
             type="button"
-            className={`${enabled ? 'bg-green-600' : 'bg-gray-600'} relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-green-500`}
+            className={`${enabled ? 'bg-green-600' : 'bg-gray-300'} relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500`}
             onClick={() => onChange(!enabled)}
         >
-            <span className={`${enabled ? 'translate-x-6' : 'translate-x-1'} inline-block w-4 h-4 transform bg-white rounded-full transition-transform`} />
+            <span className={`${enabled ? 'translate-x-6' : 'translate-x-1'} inline-block w-4 h-4 transform bg-white rounded-full transition-transform shadow-sm`} />
         </button>
     );
 };
 
-export const PaymentsConfig: React.FC = () => {
+export function PaymentsConfig() {
     const { user: adminUser } = useUser();
     const [settings, setSettings] = useState<PaymentSettings | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-    const [visibleKeys, setVisibleKeys] = useState<{ [key: string]: boolean }>({});
 
     const fetchSettings = useCallback(async () => {
         setLoading(true);
@@ -41,7 +47,7 @@ export const PaymentsConfig: React.FC = () => {
         fetchSettings();
     }, [fetchSettings]);
 
-    const handleGatewayChange = (gateway: 'stripe' | 'mercadoPago', field: keyof GatewayConfig, value: any) => {
+    const handleGatewayChange = (gateway: 'stripe' | 'mercadoPago' | 'asaas', field: keyof GatewayConfig, value: any) => {
         setSettings(prev => {
             if (!prev) return null;
             return {
@@ -82,12 +88,9 @@ export const PaymentsConfig: React.FC = () => {
     const removePackage = (index: number) => {
         setSettings(prev => {
             if (!prev) return null;
-            // This is a soft delete for the UI, the save function will need to handle the actual DB operation if needed
             const newPackages = prev.packages.filter((_, i) => i !== index);
             return { ...prev, packages: newPackages };
         });
-        // Note: a proper implementation for existing items would require a DELETE call to the DB.
-        // For simplicity here, we assume we can just remove it from the list and on save, the full list is upserted.
     };
     
     const handleSave = async () => {
@@ -97,11 +100,10 @@ export const PaymentsConfig: React.FC = () => {
         }
 
         // Validation
-        for (const gw of Object.values(settings.gateways)) {
-            // FIX: Cast gw to GatewayConfig to resolve TypeScript error.
+        for (const [key, gw] of Object.entries(settings.gateways)) {
             const gatewayConfig = gw as GatewayConfig;
-            if (gatewayConfig.enabled && (!gatewayConfig.publicKey || !gatewayConfig.secretKey)) {
-                setToast({ message: 'Gateways ativos devem ter as chaves Public e Secret preenchidas.', type: 'error' });
+            if (gatewayConfig.enabled && !gatewayConfig.publicKey) {
+                setToast({ message: `Gateway ${key} ativo deve ter a chave API (Public Key) preenchida.`, type: 'error' });
                 return;
             }
         }
@@ -132,31 +134,26 @@ export const PaymentsConfig: React.FC = () => {
         }
     };
     
-    if (loading) return <div className="text-center p-8"><i className="fas fa-spinner fa-spin text-2xl text-green-400"></i></div>;
-    if (!settings) return <div className="text-center p-8 text-red-400">Não foi possível carregar as configurações.</div>;
+    if (loading) return <div className="text-center p-8"><i className="fas fa-spinner fa-spin text-2xl text-green-600"></i></div>;
+    if (!settings) return <div className="text-center p-8 text-red-500">Não foi possível carregar as configurações.</div>;
 
-    const renderGatewayConfig = (name: 'stripe' | 'mercadoPago', title: string, icon: string) => (
-        <div className="bg-black/30 p-6 rounded-lg shadow-lg border border-green-900/30">
+    const renderGatewayConfig = (name: 'stripe' | 'mercadoPago' | 'asaas', title: string, icon: string, placeholderKey: string = 'Public Key / API Key') => (
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 transition hover:border-gray-300">
             <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center space-x-3">
-                    <i className={`${icon} text-2xl`}></i>
-                    <h3 className="text-xl font-bold text-green-400">{title}</h3>
+                    <i className={`${icon} text-2xl text-gray-600`}></i>
+                    <h3 className="text-xl font-bold text-[#263238]">{title}</h3>
                 </div>
-                <ToggleSwitch enabled={settings.gateways[name].enabled} onChange={(e) => handleGatewayChange(name, 'enabled', e)} />
+                <ToggleSwitch enabled={settings.gateways[name]?.enabled ?? false} onChange={(e) => handleGatewayChange(name, 'enabled', e)} />
             </div>
             <div className="space-y-4">
                 <div>
-                    <label className="text-xs text-gray-400 block mb-1">Public Key</label>
-                    <input type="text" value={settings.gateways[name].publicKey} onChange={(e) => handleGatewayChange(name, 'publicKey', e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-sm" />
+                    <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">{placeholderKey}</label>
+                    <input type="text" value={settings.gateways[name]?.publicKey ?? ''} onChange={(e) => handleGatewayChange(name, 'publicKey', e.target.value)} className="w-full bg-gray-50 border border-gray-300 text-gray-700 rounded p-2 text-sm focus:ring-green-500 focus:border-green-500" />
                 </div>
-                <div>
-                    <label className="text-xs text-gray-400 block mb-1">{name === 'stripe' ? 'Secret Key' : 'Access Token'}</label>
-                     <div className="relative">
-                        <input type={visibleKeys[name] ? 'text' : 'password'} value={settings.gateways[name].secretKey} onChange={(e) => handleGatewayChange(name, 'secretKey', e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-sm pr-10" />
-                        <button onClick={() => setVisibleKeys(p => ({ ...p, [name]: !p[name]}))} className="absolute inset-y-0 right-0 px-3 text-gray-400 hover:text-white">
-                            <i className={`fas ${visibleKeys[name] ? 'fa-eye-slash' : 'fa-eye'}`}></i>
-                        </button>
-                    </div>
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
+                    <i className="fas fa-lock mr-2"></i>
+                    Chaves Secretas (Secret Keys) não são mais gerenciadas aqui. Configure as variáveis de ambiente <code>MP_ACCESS_TOKEN</code> e <code>ASAAS_KEY</code> no painel do Supabase (Edge Functions) para segurança.
                 </div>
             </div>
         </div>
@@ -166,59 +163,60 @@ export const PaymentsConfig: React.FC = () => {
         <div className="space-y-8">
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {renderGatewayConfig('stripe', 'Stripe', 'fab fa-stripe-s')}
-                {renderGatewayConfig('mercadoPago', 'Mercado Pago', 'fas fa-hand-holding-usd')}
+                {renderGatewayConfig('mercadoPago', 'Mercado Pago', 'fas fa-hand-holding-usd', 'Access Token (Público)')}
+                {renderGatewayConfig('asaas', 'Asaas', 'fas fa-money-bill-wave', 'API Key (Pública)')}
             </div>
 
-            <div className="bg-black/30 p-6 rounded-lg shadow-lg border border-green-900/30">
-                <h3 className="text-xl font-bold text-green-400 mb-4">Pacotes de Créditos</h3>
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <h3 className="text-xl font-bold text-[#263238] mb-6 border-b border-gray-100 pb-3">Pacotes de Créditos</h3>
                 <div className="space-y-4">
                     {settings.packages.map((pkg, index) => (
-                        <div key={pkg.id} className="grid grid-cols-1 md:grid-cols-10 gap-3 items-center p-3 bg-gray-950/50 rounded-md border border-green-900/10">
+                        <div key={pkg.id} className="grid grid-cols-1 md:grid-cols-10 gap-3 items-center p-3 bg-gray-50 rounded-md border border-gray-200">
                             <div className="md:col-span-4">
-                                <label className="text-xs text-gray-400 block mb-1">Nome do Pacote</label>
-                                <input type="text" value={pkg.nome} onChange={(e) => handlePackageChange(index, 'nome', e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-sm"/>
+                                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Nome do Pacote</label>
+                                <input type="text" value={pkg.nome} onChange={(e) => handlePackageChange(index, 'nome', e.target.value)} className="w-full bg-white border border-gray-300 text-gray-700 rounded p-2 text-sm focus:ring-green-500 focus:border-green-500"/>
                             </div>
                             <div className="md:col-span-2">
-                                <label className="text-xs text-gray-400 block mb-1">Créditos</label>
-                                <input type="number" value={pkg.quantidade} onChange={(e) => handlePackageChange(index, 'quantidade', e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-sm"/>
+                                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Créditos</label>
+                                <input type="number" value={pkg.quantidade} onChange={(e) => handlePackageChange(index, 'quantidade', e.target.value)} className="w-full bg-white border border-gray-300 text-gray-700 rounded p-2 text-sm focus:ring-green-500 focus:border-green-500"/>
                             </div>
                              <div className="md:col-span-2">
-                                <label className="text-xs text-gray-400 block mb-1">Preço (R$)</label>
-                                <input type="number" step="0.01" value={pkg.preco} onChange={(e) => handlePackageChange(index, 'preco', e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-sm"/>
+                                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Preço (R$)</label>
+                                <input type="number" step="0.01" value={pkg.preco} onChange={(e) => handlePackageChange(index, 'preco', e.target.value)} className="w-full bg-white border border-gray-300 text-gray-700 rounded p-2 text-sm focus:ring-green-500 focus:border-green-500"/>
                             </div>
                             <div className="md:col-span-1 text-center">
-                                 <label className="text-xs text-gray-400 block mb-1">Ativo</label>
+                                 <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Ativo</label>
                                 <ToggleSwitch enabled={pkg.ativo} onChange={(e) => handlePackageChange(index, 'ativo', e)} />
                             </div>
                             <div className="md:col-span-1 flex justify-end">
-                                <button onClick={() => removePackage(index)} className="mt-5 text-red-500 hover:text-red-400 transition-colors h-9 w-9 bg-red-900/20 rounded-md">
+                                <button onClick={() => removePackage(index)} className="mt-5 text-red-500 hover:text-red-700 transition-colors h-9 w-9 bg-red-50 hover:bg-red-100 border border-red-200 rounded-md shadow-sm">
                                     <i className="fas fa-trash"></i>
                                 </button>
                             </div>
                         </div>
                     ))}
                 </div>
-                 <button onClick={addPackage} className="mt-4 px-4 py-2 text-sm font-bold text-green-300 bg-green-900/30 rounded-lg hover:bg-green-900/60 transition">
-                    <i className="fas fa-plus mr-2"></i> Adicionar Pacote
+                 <button onClick={addPackage} className="mt-6 px-4 py-2 text-sm font-bold text-green-700 bg-green-50 rounded-lg hover:bg-green-100 transition border border-green-200 flex items-center gap-2">
+                    <i className="fas fa-plus"></i> Adicionar Pacote
                 </button>
             </div>
             
-            <div className="flex justify-end">
+            <div className="flex justify-end pt-4">
                 <button
                     onClick={handleSave}
                     disabled={saving}
-                    className="px-8 py-3 font-bold text-black bg-green-600 rounded-lg hover:bg-green-500 transition-all shadow-lg shadow-green-600/20 disabled:opacity-50 disabled:cursor-wait"
+                    className="px-8 py-3 font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-wait flex items-center gap-2"
                 >
                     {saving ? (
                         <>
-                            <i className="fas fa-spinner fa-spin mr-2"></i>
+                            <i className="fas fa-spinner fa-spin"></i>
                             Salvando...
                         </>
                     ) : (
                         <>
-                            <i className="fas fa-save mr-2"></i>
+                            <i className="fas fa-save"></i>
                             Salvar Configurações
                         </>
                     )}

@@ -1,167 +1,160 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { Header } from './components/Header';
-import { NewsGenerator } from './components/NewsGenerator';
-import { NewsCard } from './components/NewsCard';
-import { Loader } from './components/Loader';
-import { generateNews } from './services/geminiService';
-import { supabase } from './services/supabaseClient';
-import { NewsArticle, NewsType } from './types';
-import { useUser } from './contexts/UserContext';
+
+import React from 'react';
+import { Header } from '../components/Header';
+import { DashboardSidebar } from '../components/DashboardSidebar';
+import { ContentGenerator } from '../components/ContentGenerator';
+import { Toast } from '../components/admin/Toast';
+import { useDashboard } from '../hooks/useDashboard';
+import { DashboardResults } from '../components/dashboard/DashboardResults';
+import { DashboardModals } from '../components/dashboard/DashboardModals';
+import { useWhiteLabel } from '../contexts/WhiteLabelContext'; // Import useWhiteLabel
+import { CrmDashboard } from '../components/crm/CrmDashboard';
+import { ServiceKey } from '../types/plan.types';
 
 interface DashboardPageProps {
   onNavigateToAdmin: () => void;
+  onNavigateToLogin: () => void;
+  onNavigate: (page: string) => void;
 }
 
-const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToAdmin }) => {
-  const { user, signOut, refresh } = useUser();
-  const [news, setNews] = useState<NewsArticle | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [metadata, setMetadata] = useState<{ version: string } | null>(null);
-
-  useEffect(() => {
-    fetch('./metadata.json')
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
-        return response.json();
-      })
-      .then(data => setMetadata(data))
-      .catch(err => console.error("Failed to load metadata:", err));
-  }, []);
-
-  const handleGenerateNews = useCallback(async (topic: string, newsType: NewsType) => {
-    if (!topic.trim()) {
-      setError('Por favor, insira um tópico para a notícia.');
-      return;
-    }
-
-    if (!user) {
-      setError('Sessão inválida. Por favor, faça login novamente.');
-      return;
-    }
-    
-    // Verificação de Crédito
-    if (user.credits !== -1 && user.credits < 1) {
-        setError('Créditos insuficientes para gerar notícia. Contate um administrador.');
-        return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-    setNews(null);
-
-    try {
-      const result = await generateNews(topic, newsType);
-      const newsArticle: NewsArticle = {
-        ...result,
-        tipo: newsType
-      };
-      setNews(newsArticle);
-      
-      // Salvar resultados no Supabase e deduzir créditos
-      if (user) {
-        // Deduzir crédito se o usuário não for admin
-        if (user.credits !== -1) {
-            const newCredits = user.credits - 1;
-            const { error: creditError } = await supabase
-                .from('profiles')
-                .update({ credits: newCredits })
-                .eq('id', user.id);
-            
-            if (creditError) {
-                console.error('Erro do Supabase ao atualizar créditos:', creditError);
-                // Não-crítico, mas podemos informar o usuário se necessário
-            } else {
-                // Atualizar o contexto do usuário para refletir os novos créditos
-                await refresh();
-            }
-        }
-        
-        // Salvar notícia com status 'pendente'
-        const { error: newsError } = await supabase.from('news').insert({
-          autor_id: user.id,
-          titulo: result.titulo,
-          conteudo: result.conteudo,
-          sources: result.sources || null,
-          tipo: newsType,
-          status: 'pending', // Adicionar status para aprovação do admin
-        });
-
-        if (newsError) {
-            console.error('Erro do Supabase ao salvar notícia:', newsError);
-            // Erro não-crítico, então não o mostramos ao usuário
-        }
-        
-        // Salvar log
-        const { error: logError } = await supabase.from('logs').insert({
-           usuario_id: user.id,
-           acao: `generated_${newsType}_news`,
-           modulo: 'Notícias',
-        });
-
-        if (logError) {
-            console.error('Erro do Supabase ao salvar log:', logError);
-        }
-      }
-
-    } catch (err) {
-      if (err instanceof Error) {
-        setError(`Falha ao gerar notícia: ${err.message}`);
-      } else {
-        setError('Ocorreu um erro desconhecido.');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user, refresh]);
-  
-  const handleLogout = async () => {
-    await signOut();
-  };
-
-  if (!user) {
-    return null; // Ou um loader, mas o App.tsx deve prevenir este estado
-  }
+export default function DashboardPage({ onNavigateToAdmin, onNavigateToLogin, onNavigate }: DashboardPageProps) {
+  const { settings: whiteLabelSettings } = useWhiteLabel(); // Use White Label settings
+  const {
+      user,
+      isGuest,
+      guestCredits,
+      GUEST_ALLOWED_MODES,
+      sidebarOpen,
+      setSidebarOpen,
+      currentMode,
+      isLoading,
+      error,
+      toast,
+      setToast,
+      results,
+      updateResultText,
+      showFeedback,
+      setShowFeedback,
+      modals,
+      toggleModal,
+      handleModeChange,
+      handleGenerateContent,
+      hasAccessToService
+  } = useDashboard();
 
   return (
-    <div className="min-h-screen bg-black text-gray-300">
-      <Header 
-        userEmail={user.email} 
-        onLogout={handleLogout} 
-        isAdmin={user.role === 'admin' || user.role === 'super_admin'}
+    <div className="min-h-screen bg-[#ECEFF1] text-[#263238] font-['Poppins']">
+      <Header
+        userEmail={user?.email}
+        onLogout={user ? async () => { await import('../contexts/UserContext').then(m => m.useUser().signOut); window.location.reload(); } : undefined}
+        isAdmin={user?.role === 'admin' || user?.role === 'super_admin'}
         onNavigateToAdmin={onNavigateToAdmin}
-        userCredits={user.credits}
-        userRole={user.role}
+        onNavigateToLogin={!user ? onNavigateToLogin : undefined}
+        onOpenPlans={() => toggleModal('plans', true)}
+        onOpenManual={() => toggleModal('manual', true)}
+        onOpenHistory={() => toggleModal('history', true)}
+        onOpenAffiliates={() => toggleModal('affiliate', true)}
+        onOpenIntegrations={() => toggleModal('integrations', true)}
+        userCredits={isGuest ? guestCredits : user?.credits}
+        pageTitle={currentMode === 'crm_suite' ? 'Gestão de Leads' : whiteLabelSettings.dashboardTitle}
+        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
       />
-      <main className="container mx-auto p-4 md:p-8">
-        <div className="max-w-3xl mx-auto">
-          <p className="text-center text-lg text-gray-400 mb-8">
-            Gere notícias sobre eventos das últimas 48 horas ou crie artigos preditivos sobre acontecimentos futuros. Insira um tópico e deixe a IA fazer o resto.
-          </p>
-          <NewsGenerator onGenerate={handleGenerateNews} isLoading={isLoading} />
-          
-          {error && (
-            <div className="mt-8 bg-red-900/20 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-center" role="alert">
-              <strong className="font-bold">Erro: </strong>
-              <span className="block sm:inline">{error}</span>
-            </div>
-          )}
 
-          <div className="mt-8">
-            {isLoading && <Loader />}
-            {news && !isLoading && (
-              <NewsCard article={news} />
-            )}
-          </div>
-        </div>
-      </main>
-      <footer className="text-center p-4 text-gray-500 text-sm">
-        <p>Desenvolvido com IA | GDN_IA &copy; 2024 | Versão {metadata?.version || '1.0.2'}</p>
-      </footer>
+      <div className="flex h-[calc(100vh-64px)] overflow-hidden">
+        
+        {/* SIDEBAR */}
+        <DashboardSidebar 
+            isOpen={sidebarOpen}
+            setIsOpen={setSidebarOpen}
+            currentMode={currentMode as ServiceKey}
+            onModeChange={handleModeChange}
+            user={user}
+            isGuest={isGuest}
+            activeCredits={isGuest ? guestCredits : (user?.credits || 0)}
+            hasAccessToService={hasAccessToService}
+            guestAllowedModes={GUEST_ALLOWED_MODES}
+            onOpenPlans={() => toggleModal('plans', true)}
+            onOpenAffiliates={() => toggleModal('affiliate', true)}
+            onOpenHistory={() => toggleModal('history', true)}
+            onOpenIntegrations={() => toggleModal('integrations', true)}
+            onOpenManual={() => toggleModal('manual', true)}
+            onNavigateFeedback={() => onNavigate('feedback')}
+        />
+
+        {/* MAIN CONTENT */}
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 relative custom-scrollbar bg-[#F5F7FA]">
+            <div className="max-w-5xl mx-auto">
+                
+                {/* CONDITIONAL RENDER: CRM OR GENERATOR */}
+                {currentMode === 'crm_suite' ? (
+                    <div className="animate-fade-in-up">
+                        <div className="mb-6">
+                            <h2 className="text-2xl font-bold text-[#263238] flex items-center gap-2">
+                                <i className="fas fa-users-cog text-blue-600"></i> CRM & Leads
+                            </h2>
+                            <p className="text-gray-500 text-sm">Gerencie os contatos capturados pelas suas landing pages.</p>
+                        </div>
+                        <CrmDashboard />
+                    </div>
+                ) : (
+                    <>
+                        {/* GENERATOR INPUT */}
+                        <ContentGenerator 
+                            mode={currentMode as ServiceKey} 
+                            onModeChange={(m) => handleModeChange(m)}
+                            onGenerate={handleGenerateContent}
+                            isLoading={isLoading}
+                            isGuest={isGuest}
+                            guestAllowedModes={GUEST_ALLOWED_MODES}
+                        />
+
+                        {/* ERROR DISPLAY */}
+                        {error && (
+                            <div className="mt-6 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 rounded shadow-sm animate-fade-in" role="alert">
+                                <p className="font-bold">Erro</p>
+                                <p>{error}</p>
+                            </div>
+                        )}
+
+                        {/* RESULTS AREA */}
+                        <DashboardResults 
+                            currentMode={currentMode as ServiceKey}
+                            results={results}
+                            isLoading={isLoading}
+                            user={user}
+                            onCloseEditor={() => updateResultText(null)}
+                            showFeedback={showFeedback}
+                            onCloseFeedback={() => setShowFeedback(false)}
+                        />
+                    </>
+                )}
+
+                {/* MARKETING FOOTER FOR GUESTS */}
+                {isGuest && (
+                    <div className="mt-12 p-6 bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl text-center text-white shadow-xl animate-fade-in">
+                        <h3 className="text-xl font-bold mb-2">{whiteLabelSettings.guestMarketingFooterTitle}</h3>
+                        <p className="text-gray-300 mb-6 text-sm">{whiteLabelSettings.guestMarketingFooterSubtitle}</p>
+                        <button 
+                            onClick={onNavigateToLogin}
+                            className="bg-[var(--brand-tertiary)] hover:bg-green-600 text-white font-bold py-3 px-8 rounded-full transition transform hover:-translate-y-1 shadow-lg shadow-[var(--brand-tertiary)]/30"
+                        >
+                            {whiteLabelSettings.guestMarketingFooterCtaText}
+                        </button>
+                    </div>
+                )}
+            </div>
+        </main>
+      </div>
+
+      {/* MODALS */}
+      <DashboardModals 
+          modals={modals}
+          toggleModal={toggleModal}
+          user={user}
+          onNavigateToLogin={onNavigateToLogin}
+      />
+
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
-};
-
-export default DashboardPage;
+}

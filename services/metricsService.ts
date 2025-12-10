@@ -1,112 +1,194 @@
+import { api } from './api';
 import { supabase } from './supabaseClient';
+import { GUEST_ID } from '../constants';
 
 export interface DashboardMetrics {
   totalUsers: number;
   activeUsers: number;
   creditsInCirculation: number;
   totalRevenue: number;
+  totalGenerations: number;
+  guestGenerations: number;
+  systemErrors: number;
+  totalCommissions: number;
 }
 
 export interface DailyUsageDataPoint {
-    report_date: string; // Esperado como 'YYYY-MM-DD' do banco de dados
+    report_date: string;
     news_count: number;
     new_users_count: number;
 }
 
-/**
- * Busca as principais métricas do dashboard de uma só vez.
- * Utiliza chamadas RPC para operações complexas/seguras e consultas diretas para contagens simples.
- * Pressupõe a existência das seguintes funções RPC no Supabase:
- * - get_active_users_7d(): Retorna a contagem de usuários ativos nos últimos 7 dias.
- */
+// Helper to format date YYYY-MM-DD
+const formatDate = (date: Date) => date.toISOString().split('T')[0];
+
 export const getDashboardMetrics = async (): Promise<DashboardMetrics> => {
   try {
-    // Função para buscar o faturamento total diretamente
-    const fetchTotalRevenue = async () => {
-        const { data, error } = await supabase
-            .from('transactions')
-            .select('valor')
-            .eq('status', 'approved');
-        
-        if (error) throw new Error(`Faturamento: ${error.message}`);
-        return data?.reduce((sum, transaction) => sum + transaction.valor, 0) || 0;
-    };
-      
-    // Função para buscar créditos em circulação da tabela 'profiles'
-    const fetchCirculatingCredits = async () => {
-        const { data, error } = await supabase
-            .from('profiles') 
-            .select('credits')
-            .neq('credits', -1); // Admins/créditos ilimitados são -1, não os contamos
-        if (error) throw new Error(`Créditos em Circulação: ${error.message}`);
-        return data?.reduce((sum, user) => sum + user.credits, 0) || 0;
-    };
+    // 1. Total Users (Count Exact)
+    const { count: totalUsers } = await supabase
+        .from('app_users')
+        .select('*', { count: 'exact', head: true });
 
-    const [
-      totalUsersRes,
-      activeUsersRes,
+    // 2. Active Users (Last 7 Days) - Fetch IDs only for performance
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    // Using supabase direct client for complex filtering logic not supported by simple proxy
+    const { data: activeLogs } = await supabase
+        .from('logs')
+        .select('usuario_id')
+        .gte('data', sevenDaysAgo.toISOString());
+    
+    let activeUsers = 0;
+    if (activeLogs) {
+        const uniqueUsers = new Set(activeLogs.map((log: any) => log.usuario_id).filter((id: string) => id && id !== GUEST_ID));
+        activeUsers = uniqueUsers.size;
+    }
+
+    // 3. Credits (Sum)
+    const { data: creditsData } = await api.select('user_credits');
+    let creditsInCirculation = 0;
+    if (creditsData) {
+        creditsInCirculation = creditsData
+            .filter((c: any) => c.credits !== -1)
+            .reduce((sum: number, c: any) => sum + c.credits, 0);
+    }
+
+    // 4. Revenue (Sum)
+    const { data: transactionsData } = await api.select('transactions', { status: 'approved' });
+    let totalRevenue = 0;
+    if (transactionsData) {
+        totalRevenue = transactionsData.reduce((sum: number, t: any) => sum + t.valor, 0);
+    }
+
+    // 5. Guest Generations (Count Exact with Filter)
+    // Counts logs where user is GUEST and action starts with 'generated_content_'
+    // Using simple ILIKE search on action column
+    const { count: guestGenerations } = await supabase
+        .from('logs')
+        .select('*', { count: 'exact', head: true })
+        .eq('usuario_id', GUEST_ID)
+        .ilike('acao', 'generated_content_%');
+
+    // 6. Total Generations (News Count + Guest Count)
+    const { count: userGenerations } = await supabase
+        .from('news')
+        .select('*', { count: 'exact', head: true });
+        
+    const totalGenerations = (userGenerations || 0) + (guestGenerations || 0);
+
+    // 7. System Errors (Last 24h)
+    // Counting logs where JSON details contains "level": "error" is hard without proper indexing/parsing
+    // We will approximate by fetching recent logs and filtering in memory or checking action names if applicable
+    const oneDayAgo = new Date();
+    oneDayAgo.setHours(oneDayAgo.getHours() - 24);
+    
+    const { data: recentLogs } = await supabase
+        .from('logs')
+        .select('detalhes')
+        .gte('data', oneDayAgo.toISOString());
+        
+    let systemErrors = 0;
+    if (recentLogs) {
+        systemErrors = recentLogs.filter((log: any) => {
+            const det = log.detalhes;
+            // Check for explicit level or common error keys
+            return det && (det.level === 'error' || det.error); 
+        }).length;
+    }
+
+    // 8. Total Commissions Paid
+    const { data: affiliateLogs } = await api.select('affiliate_logs');
+    let totalCommissions = 0;
+    if (affiliateLogs) {
+        totalCommissions = affiliateLogs.reduce((sum: number, log: any) => sum + Number(log.amount), 0);
+    }
+
+    return {
+      totalUsers: totalUsers || 0,
+      activeUsers,
       creditsInCirculation,
       totalRevenue,
-    ] = await Promise.all([
-      // 1. Total de usuários (lendo da view 'users' que reflete auth.users)
-      supabase.from('users').select('id', { count: 'exact', head: true }),
-      // 2. Usuários ativos (via RPC seguro)
-      supabase.rpc('get_active_users_7d'),
-      // 3. Créditos em circulação (via query direta na tabela 'profiles')
-      fetchCirculatingCredits(),
-      // 4. Faturamento total (via query direta)
-      fetchTotalRevenue(),
-    ]);
-
-    // Verificação de erros para cada promessa
-    if (totalUsersRes.error) throw new Error(`Total de Usuários: ${totalUsersRes.error.message}`);
-    if (activeUsersRes.error) throw new Error(`Usuários Ativos: ${activeUsersRes.error.message}`);
-    
-    return {
-      totalUsers: totalUsersRes.count ?? 0,
-      activeUsers: activeUsersRes.data ?? 0,
-      creditsInCirculation: creditsInCirculation ?? 0,
-      totalRevenue: totalRevenue ?? 0,
+      totalGenerations,
+      guestGenerations: guestGenerations || 0,
+      systemErrors,
+      totalCommissions
     };
   } catch (error) {
-    console.error('Erro ao buscar métricas do dashboard:', error);
-    if (error instanceof Error) {
-        // Personaliza a mensagem de erro para ser mais amigável, indicando que pode ser uma função RPC faltando
-        if(error.message.includes('relation') && error.message.includes('does not exist')) {
-            throw new Error("Uma função necessária (RPC) não foi encontrada no banco de dados. Verifique a configuração.");
-        }
-        throw error;
-    }
-    throw new Error('Ocorreu um erro desconhecido ao buscar as métricas.');
+    console.error('Erro ao buscar métricas (Otimizado):', error);
+    // Return zeros on error to avoid crashing UI
+    return {
+      totalUsers: 0,
+      activeUsers: 0,
+      creditsInCirculation: 0,
+      totalRevenue: 0,
+      totalGenerations: 0,
+      guestGenerations: 0,
+      systemErrors: 0,
+      totalCommissions: 0
+    };
   }
 };
 
-/**
- * Busca os dados de uso diário para o gráfico.
- * Pressupõe a existência da função RPC `get_daily_platform_usage` no Supabase.
- * Esta função deve retornar uma lista de registros para cada um dos últimos 7 dias,
- * mesmo que a contagem seja zero, para garantir um gráfico contínuo.
- * Formato esperado do retorno: [{ report_date: 'YYYY-MM-DD', news_count: X, new_users_count: Y }, ...]
- */
 export const getDailyUsageChartData = async (): Promise<DailyUsageDataPoint[]> => {
-    const { data, error } = await supabase.rpc('get_daily_platform_usage');
+    try {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    if (error) {
-        // Log the full error object for debugging purposes
-        console.error('Erro ao buscar dados do gráfico de uso:', error);
+        // Fetch needed data (optimized selection)
+        const { data: newsData } = await supabase
+            .from('news')
+            .select('criado_em')
+            .gte('criado_em', sevenDaysAgo.toISOString());
+            
+        const { data: usersData } = await supabase
+            .from('app_users')
+            .select('created_at')
+            .gte('created_at', sevenDaysAgo.toISOString());
 
-        // Safely extract the error message to avoid displaying "[object Object]"
-        let errorMessage = 'Falha ao carregar os dados de uso diário.';
-        if (error && typeof error.message === 'string') {
-            if (error.message.includes('function') && error.message.includes('does not exist')) {
-                 errorMessage = "A função para buscar dados do gráfico ('get_daily_platform_usage') não foi encontrada no banco de dados.";
-            } else {
-                errorMessage = error.message;
-            }
+        // Initialize map for last 7 days
+        const dailyMap = new Map<string, { news: number, users: number }>();
+        for (let i = 0; i < 7; i++) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            dailyMap.set(formatDate(d), { news: 0, users: 0 });
         }
-        
-        throw new Error(errorMessage);
-    }
 
-    return data;
+        // Process News
+        if (newsData) {
+            newsData.forEach((n: any) => {
+                const dateKey = formatDate(new Date(n.criado_em));
+                if (dailyMap.has(dateKey)) {
+                    dailyMap.get(dateKey)!.news++;
+                }
+            });
+        }
+
+        // Process Users
+        if (usersData) {
+            usersData.forEach((u: any) => {
+                const dateKey = formatDate(new Date(u.created_at));
+                if (dailyMap.has(dateKey)) {
+                    dailyMap.get(dateKey)!.users++;
+                }
+            });
+        }
+
+        // Convert map to array
+        const chartData: DailyUsageDataPoint[] = [];
+        dailyMap.forEach((val, key) => {
+            chartData.push({
+                report_date: key,
+                news_count: val.news,
+                new_users_count: val.users
+            });
+        });
+
+        // Sort by date ascending
+        return chartData.sort((a, b) => a.report_date.localeCompare(b.report_date));
+
+    } catch (error) {
+        console.error('Erro ao calcular gráfico:', error);
+        return [];
+    }
 };

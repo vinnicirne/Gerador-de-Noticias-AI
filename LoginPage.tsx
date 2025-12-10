@@ -1,177 +1,53 @@
 
-import React, { useState, useEffect } from 'react';
-import { supabase } from './services/supabaseClient';
-import type { User } from './types';
 
-// A lógica de authService.ts agora está contida na página de login
-const performLogin = async (email: string, password: string): Promise<User> => {
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
-    
-    if (authError) {
-        if (authError.message.includes('Invalid login credentials')) {
-            throw new Error('Credenciais inválidas. Verifique seu email e senha.');
-        }
-        throw new Error('Falha na autenticação: ' + authError.message);
-    }
+import React from 'react';
+import { LoginForm } from './components/auth/LoginForm'; // Import the new form component
+import { useWhiteLabel } from './contexts/WhiteLabelContext'; // Import useWhiteLabel
 
-    if (!authData.user) throw new Error('Usuário não encontrado após a autenticação.');
-
-    // O perfil do usuário é carregado da tabela 'profiles' e combinado com o email da autenticação.
-    const { data: userProfileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, full_name, role, status, credits, plan')
-        .eq('id', authData.user.id)
-        .single();
-    
-    if (profileError) {
-        await supabase.auth.signOut();
-        if (profileError.message.includes("Could not find the table") || profileError.message.includes("relation \"public.profiles\" does not exist")) {
-            throw new Error("Erro de configuração: A tabela 'profiles' não foi encontrada. Execute o script SQL em 'services/adminService.ts' para configurar o banco de dados.");
-        }
-        throw new Error('Falha ao consultar o perfil do usuário: ' + profileError.message);
-    }
-    
-    // O objeto retornado é construído para corresponder à interface User
-    return {
-        ...userProfileData,
-        email: authData.user.email!,
-    };
-};
-
-
-const LoginPage: React.FC = () => {
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [isAdminMode, setIsAdminMode] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: 'error' | 'success', text: string } | null>(null);
-
-  useEffect(() => {
-    if (isSignUp) {
-        setIsAdminMode(false);
-    }
-  }, [isSignUp]);
-
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setMessage(null);
-
-    if (isSignUp) {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) {
-            setMessage({ type: 'error', text: error.message });
-        } else {
-            setEmail('');
-            setPassword('');
-            setMessage({ type: 'success', text: 'Conta criada! Por favor, verifique seu email para confirmar.' });
-            setIsSignUp(false);
-        }
-    } else {
-        try {
-          const user = await performLogin(email, password);
-          if (isAdminMode && user.role !== 'admin' && user.role !== 'super_admin') {
-              await supabase.auth.signOut();
-              throw new Error('Acesso negado: Credenciais sem privilégios de Administrador.');
-          }
-          // Após um login bem-sucedido, o listener onAuthStateChange do UserProvider
-          // irá automaticamente buscar o perfil do usuário e renderizar novamente o aplicativo,
-          // navegando efetivamente para longe da página de login. Nenhum callback é necessário.
-        } catch (err) {
-          if (err instanceof Error) {
-            setMessage({ type: 'error', text: err.message });
-          } else {
-            setMessage({ type: 'error', text: 'Ocorreu um erro inesperado.' });
-          }
-        }
-    }
-    setIsLoading(false);
-  };
-
-  const theme = isAdminMode 
-  ? { // Tema Admin (Alerta Vermelho)
-      textColor: 'text-red-400',
-      borderColor: 'border-red-500/30',
-      focusRingColor: 'focus:ring-red-500',
-      focusBorderColor: 'focus:border-red-500',
-      shadow: 'shadow-[0_0_15px_rgba(220,38,38,0.4)]',
-      buttonBg: 'bg-red-600 hover:bg-red-500 text-white',
-      toggleActive: 'bg-red-500 text-white',
-      icon: 'fa-user-secret',
-      title: 'Acesso Admin',
-      subtitle: 'Protocolo de Segurança GDN_IA',
-  } 
-  : { // Tema Usuário (Hacker Verde)
-      textColor: 'text-green-400',
-      borderColor: 'border-green-500/30',
-      focusRingColor: 'focus:ring-green-500',
-      focusBorderColor: 'focus:border-green-500',
-      shadow: 'shadow-[0_0_15px_rgba(34,197,94,0.3)]',
-      buttonBg: 'bg-green-600 hover:bg-green-500 text-black',
-      toggleActive: 'bg-green-500 text-black',
-      icon: 'fa-robot',
-      title: 'Login de Usuário',
-      subtitle: 'Gerador de Notícias Inteligente',
-  };
-
-  const currentTitle = isSignUp ? 'Criar Nova Conta' : theme.title;
-  const buttonText = isLoading ? 'Processando...' : (isSignUp ? 'Registrar' : 'Autenticar');
+function LoginPage() {
+  const { settings } = useWhiteLabel(); // Use white label settings
+  const features = [
+    { icon: 'fa-clock', title: 'Notícias em Tempo Real', description: 'Cobertura de eventos das últimas 48 horas com fontes da web.' },
+    { icon: 'fa-wand-magic-sparkles', title: 'Análises Preditivas', description: 'Explore tendências e cenários futuros com análises baseadas em dados.' },
+    { icon: 'fa-feather-alt', title: 'Conteúdo Otimizado', description: 'Artigos imparciais e bem estruturados, prontos para publicação.' },
+  ];
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-black font-mono">
-      <div className={`w-full max-w-sm bg-black/80 backdrop-blur-md border ${theme.borderColor} rounded-lg ${theme.shadow} overflow-hidden animate-fade-in-scale`}>
-        <div className={`p-6 border-b ${theme.borderColor} text-center bg-black/20`}>
-          <i className={`fas ${isSignUp ? 'fa-user-plus' : theme.icon} text-4xl ${theme.textColor} mb-3 opacity-80 transition-all duration-300`}></i>
-          <h1 className="text-xl font-bold tracking-widest text-gray-200 uppercase">{currentTitle}</h1>
-          <p className={`text-xs ${theme.textColor}/80`}>{isSignUp ? 'Junte-se à plataforma de IA' : theme.subtitle}</p>
-        </div>
-        <div className="p-8">
-          <form onSubmit={handleAuth} className="space-y-6">
-            {message && (
-              <div className={`p-3 text-xs rounded-md border ${message.type === 'error' ? 'bg-red-900/20 border-red-500/30 text-red-400' : 'bg-green-900/20 border-green-500/30 text-green-400'}`}>
-                {message.text}
+    <div className="min-h-screen w-full bg-[#ECEFF1] font-['Poppins'] text-[#263238]">
+      <div className="grid lg:grid-cols-2 min-h-screen">
+         {/* Coluna Esquerda/Topo: Landing Info */}
+         <div className="flex flex-col justify-center p-8 md:p-12 lg:p-16 lg:border-r lg:border-[#CFD8DC] bg-white lg:bg-transparent">
+          <div className="max-w-md mx-auto lg:mx-0 animate-fade-in-up">
+            <div className="text-4xl font-bold tracking-widest mb-6 text-center lg:text-left">
+              <span className="text-[var(--brand-secondary)]">{settings.logoTextPart1}</span>
+              <span className="text-[var(--brand-primary)]">{settings.logoTextPart2}</span>
+            </div>
+            <div className="hidden lg:block">
+              <h1 className="text-3xl lg:text-4xl font-bold tracking-tight mb-4 text-[var(--brand-secondary)]">
+                {settings.appTagline},
+                <span className="text-[var(--brand-primary)]"> Hoje.</span>
+              </h1>
+              <p className="text-lg text-gray-600 mb-8 leading-relaxed">
+                Gere artigos sobre eventos recentes ou explore cenários futuros com nossa inteligência artificial avançada.
+              </p>
+              <div className="space-y-6">
+                {features.map((feature, index) => (
+                  <div key={index} className="flex items-start space-x-4 p-4 rounded-lg bg-white shadow-sm border border-[#CFD8DC]">
+                    <div className="mt-1"><i className={`fas ${feature.icon} text-xl text-[var(--brand-primary)]`}></i></div>
+                    <div>
+                      <h3 className="font-bold text-[var(--brand-secondary)]">{feature.title}</h3>
+                      <p className="text-sm text-gray-500">{feature.description}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
-            )}
-            <div>
-              <label className={`block text-xs uppercase font-bold mb-2 tracking-wider ${theme.textColor}`}>Email de Acesso</label>
-              <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
-                className={`w-full bg-black border-2 border-green-900/60 text-gray-200 p-3 text-sm rounded-md ${theme.focusBorderColor} focus:outline-none focus:ring-0 transition duration-300`}
-              />
             </div>
-            <div>
-              <label className={`block text-xs uppercase font-bold mb-2 tracking-wider ${theme.textColor}`}>Senha</label>
-              <input type="password" required value={password} onChange={e => setPassword(e.target.value)}
-                className={`w-full bg-black border-2 border-green-900/60 text-gray-200 p-3 text-sm rounded-md ${theme.focusBorderColor} focus:outline-none focus:ring-0 transition duration-300`}
-              />
-            </div>
-            <button type="submit" disabled={isLoading}
-              className={`w-full font-bold py-3 text-sm uppercase tracking-widest rounded-md transition-all duration-300 shadow-lg disabled:opacity-50 disabled:cursor-wait ${theme.buttonBg}`}
-            >
-              {buttonText}
-            </button>
-          </form>
-          <div className="mt-6 text-center text-xs">
-            {isSignUp ? (
-                <p className="text-gray-500">
-                  Já tem uma conta?{' '}
-                  <button onClick={() => setIsSignUp(false)} className={`font-bold ${theme.textColor} hover:underline`}>Fazer Login</button>
-                </p>
-            ) : (
-              <>
-                <div className="flex justify-center items-center my-4">
-                  <button onClick={() => setIsAdminMode(false)} className={`px-4 py-1 rounded-l-md text-xs font-bold transition ${!isAdminMode ? theme.toggleActive : 'bg-gray-700/50 text-gray-400 hover:bg-gray-600'}`}>Usuário</button>
-                  <button onClick={() => setIsAdminMode(true)} className={`px-4 py-1 rounded-r-md text-xs font-bold transition ${isAdminMode ? theme.toggleActive : 'bg-gray-700/50 text-gray-400 hover:bg-gray-600'}`}>Admin</button>
-                </div>
-                {!isAdminMode && (
-                    <p className="text-gray-500">
-                      Não tem uma conta?{' '}
-                      <button onClick={() => setIsSignUp(true)} className={`font-bold ${theme.textColor} hover:underline`}>Crie uma conta</button>
-                    </p>
-                )}
-              </>
-            )}
           </div>
+        </div>
+
+        {/* Coluna Direita/Baixo: Formulário de Login */}
+        <div className="flex items-center justify-center p-4 bg-[#ECEFF1]">
+          <LoginForm />
         </div>
       </div>
     </div>

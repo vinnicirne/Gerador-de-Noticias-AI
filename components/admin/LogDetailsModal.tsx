@@ -1,3 +1,5 @@
+
+
 import React, { useEffect } from 'react';
 import { Log } from '../../types';
 
@@ -6,7 +8,7 @@ interface LogDetailsModalProps {
   onClose: () => void;
 }
 
-export const LogDetailsModal: React.FC<LogDetailsModalProps> = ({ log, onClose }) => {
+export function LogDetailsModal({ log, onClose }: LogDetailsModalProps) {
   useEffect(() => {
     const handleEsc = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {

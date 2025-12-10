@@ -1,4 +1,7 @@
+
+
 import React, { useState, useEffect, useCallback } from 'react';
+// FIX: Imported getNewsWithAuthors from adminService
 import { getNewsWithAuthors, updateNewsStatus } from '../../services/adminService';
 import { NewsArticle, NewsStatus } from '../../types';
 import { Pagination } from './Pagination';
@@ -10,9 +13,10 @@ const NEWS_PER_PAGE = 10;
 interface NewsTableProps {
     onEdit: (article: NewsArticle) => void;
     dataVersion: number;
+    statusFilter?: NewsStatus | 'all'; // Now optional and can be passed
 }
 
-export const NewsTable: React.FC<NewsTableProps> = ({ onEdit, dataVersion }) => {
+export function NewsTable({ onEdit, dataVersion, statusFilter: initialStatusFilter = 'all' }: NewsTableProps) {
   const { user: adminUser } = useUser();
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [totalNews, setTotalNews] = useState(0);
@@ -24,16 +28,17 @@ export const NewsTable: React.FC<NewsTableProps> = ({ onEdit, dataVersion }) => 
 
   // Filtering and pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState<NewsStatus | 'all'>('all');
+  const [currentStatusFilter, setCurrentStatusFilter] = useState<NewsStatus | 'all'>(initialStatusFilter);
 
   const fetchNews = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+      // FIX: Call getNewsWithAuthors
       const { news: newsList, count } = await getNewsWithAuthors({ 
           page: currentPage, 
           limit: NEWS_PER_PAGE,
-          status: statusFilter,
+          status: currentStatusFilter,
       });
       setNews(newsList);
       setTotalNews(count);
@@ -42,109 +47,141 @@ export const NewsTable: React.FC<NewsTableProps> = ({ onEdit, dataVersion }) => 
     } finally {
       setLoading(false);
     }
-  }, [currentPage, statusFilter]);
+  }, [currentPage, currentStatusFilter]);
 
   useEffect(() => {
     fetchNews();
-  }, [fetchNews, dataVersion]);
+  }, [fetchNews, dataVersion]); // Recarrega se dataVersion mudar
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [statusFilter]);
-
-  const handleStatusChange = async (newsId: number, status: NewsStatus) => {
+  const handleStatusChange = async (articleId: number, newStatus: NewsStatus) => {
     if (!adminUser) {
         setError("Sessão de administrador inválida.");
         return;
     }
     try {
-      await updateNewsStatus(newsId, status, adminUser.id);
-      fetchNews(); // Refresh data
+      await updateNewsStatus(articleId, newStatus, adminUser.id);
+      fetchNews(); // Recarrega a lista para mostrar o status atualizado
     } catch (err: any) {
-      setError(err.message || "Falha ao atualizar o status da notícia.");
-    }
-  };
-
-  const getStatusChip = (status?: NewsStatus) => {
-    const baseClasses = "px-2 py-1 text-xs font-bold rounded-full capitalize";
-    switch(status) {
-        case 'approved': return `${baseClasses} bg-green-900/50 text-green-300`;
-        case 'rejected': return `${baseClasses} bg-red-900/50 text-red-400`;
-        case 'pending': return `${baseClasses} bg-yellow-900/50 text-yellow-400`;
-        default: return `${baseClasses} bg-gray-800/50 text-gray-400`;
+      setError(err.message || 'Falha ao atualizar status da notícia.');
     }
   };
 
   const totalPages = Math.ceil(totalNews / NEWS_PER_PAGE);
 
-  return (
-    <>
-      <div className="bg-black/30 p-6 rounded-lg shadow-lg border border-green-900/30">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-          <h2 className="text-2xl font-bold text-green-400 whitespace-nowrap">Gerenciamento de Notícias</h2>
-          <div className="flex items-center space-x-4">
-            <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as NewsStatus | 'all')}
-                className="bg-gray-800 border border-gray-600 text-white text-sm rounded-lg focus:ring-green-500 focus:border-green-500"
-            >
-              <option value="all">Todos os Status</option>
-              <option value="pending">Pendente</option>
-              <option value="approved">Aprovada</option>
-              <option value="rejected">Rejeitada</option>
-            </select>
-          </div>
-        </div>
+  const getStatusChip = (status: NewsStatus) => {
+    const styles = {
+      pending: 'bg-yellow-100 text-yellow-700',
+      approved: 'bg-green-100 text-green-700',
+      rejected: 'bg-red-100 text-red-700',
+    };
+    return <span className={`px-2 py-1 text-xs font-bold rounded-full capitalize ${styles[status]}`}>{status}</span>;
+  };
 
-        {loading && <div className="text-center p-4">Carregando notícias...</div>}
-        {error && <div className="text-center p-4 text-red-400 bg-red-900/20 border-red-500/30 rounded-md"><strong>Erro:</strong> {error}</div>}
-        
-        {!loading && !error && (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left text-gray-300">
-                <thead className="text-xs text-green-300 uppercase bg-black/40">
-                  <tr>
-                    <th scope="col" className="px-6 py-3">Título</th>
-                    <th scope="col" className="px-6 py-3">Autor</th>
-                    <th scope="col" className="px-6 py-3 text-center">Status</th>
-                    <th scope="col" className="px-6 py-3">Data</th>
-                    <th scope="col" className="px-6 py-3 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {news.map(article => (
-                    <tr key={article.id} className="bg-gray-950/50 border-b border-green-900/20 hover:bg-green-900/10 transition-colors">
-                      <td className="px-6 py-4 font-medium whitespace-nowrap max-w-xs truncate" title={article.titulo}>{article.titulo}</td>
-                      <td className="px-6 py-4 text-gray-400">{article.author?.email || 'N/A'}</td>
-                      <td className="px-6 py-4 text-center">
-                        <span className={getStatusChip(article.status)}>{article.status}</span>
-                      </td>
-                      <td className="px-6 py-4">{new Date(article.criado_em || '').toLocaleString('pt-BR')}</td>
-                      <td className="px-6 py-4 text-right space-x-3 whitespace-nowrap">
-                        <button onClick={() => setViewingArticle(article)} className="font-medium text-blue-400 hover:underline">Ver</button>
-                        <button onClick={() => onEdit(article)} className="font-medium text-yellow-400 hover:underline">Editar</button>
-                        {article.status === 'pending' && article.id && (
-                          <>
-                            <button onClick={() => handleStatusChange(article.id!, 'approved')} className="font-medium text-green-400 hover:underline">Aprovar</button>
-                            <button onClick={() => handleStatusChange(article.id!, 'rejected')} className="font-medium text-red-400 hover:underline">Rejeitar</button>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {news.length === 0 && <p className="text-center text-gray-500 py-8">Nenhuma notícia encontrada para os filtros selecionados.</p>}
-            <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
-          </>
+  const getTypeName = (type?: string) => {
+      if(!type) return 'GERAL';
+      if(type === 'news_generator') return 'NOTÍCIA';
+      if(type === 'image_generation') return 'IMAGEM';
+      if(type === 'landingpage_generator') return 'CRIADOR DE SITES (WEB)'; // Unificado
+      if(type === 'canva_structure') return 'SOCIAL MEDIA';
+      if(type === 'curriculum_generator') return 'CURRÍCULO (IA)'; // NOVO
+      return type.toUpperCase().replace('_', ' ');
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+        <h2 className="text-2xl font-bold text-[#263238] whitespace-nowrap">Histórico de Conteúdo</h2>
+        {initialStatusFilter === 'all' && ( // Só mostra o filtro de status se não for fixo
+            <select
+                value={currentStatusFilter}
+                onChange={(e) => setCurrentStatusFilter(e.target.value as NewsStatus | 'all')}
+                className="bg-gray-50 border border-gray-300 text-gray-700 text-sm rounded-lg focus:ring-green-500 focus:border-green-500 block p-2.5"
+            >
+                <option value="all">Todos os Status</option>
+                <option value="pending">Pendente</option>
+                <option value="approved">Aprovado</option>
+                <option value="rejected">Rejeitado</option>
+            </select>
         )}
       </div>
 
-      {viewingArticle && (
-        <NewsViewModal article={viewingArticle} onClose={() => setViewingArticle(null)} />
+      {loading && <div className="text-center p-4 text-gray-500"><i className="fas fa-spinner fa-spin text-green-600 mr-2"></i>Carregando...</div>}
+      {error && <div className="text-center p-4 text-red-600 bg-red-50 border-red-200 rounded-md"><strong>Erro:</strong> {error}</div>}
+      
+      {!loading && !error && (
+        <>
+        <div className="overflow-x-auto rounded-lg border border-gray-200">
+            <table className="w-full text-sm text-left text-gray-600">
+            <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b border-gray-200">
+                <tr>
+                <th scope="col" className="px-4 py-3 font-semibold">ID</th>
+                <th scope="col" className="px-4 py-3 font-semibold">Título / Prompt</th>
+                <th scope="col" className="px-4 py-3 font-semibold">Tipo</th>
+                <th scope="col" className="px-4 py-3 font-semibold">Autor</th>
+                <th scope="col" className="px-4 py-3 text-center font-semibold">Status</th>
+                <th scope="col" className="px-4 py-3 text-right font-semibold">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {news.length === 0 ? (
+                    <tr>
+                        <td colSpan={6} className="text-center py-8 text-gray-500">
+                            Nenhum conteúdo gerado encontrado.
+                        </td>
+                    </tr>
+                ) : (
+                    news.map(article => (
+                    <tr key={article.id} className="bg-white border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 font-mono text-gray-500">{article.id}</td>
+                        <td className="px-4 py-3 font-medium text-[#263238] max-w-xs truncate">{article.titulo}</td>
+                        <td className="px-4 py-3 text-gray-500">{getTypeName(article.tipo)}</td>
+                        <td className="px-4 py-3 text-gray-500">{article.author?.email || 'Sistema'}</td>
+                        <td className="px-4 py-3 text-center">
+                            {article.status && getStatusChip(article.status)}
+                        </td>
+                        <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+                            <button 
+                                onClick={() => setViewingArticle(article)}
+                                className="font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                            >
+                                Ver
+                            </button>
+                            <button 
+                                onClick={() => onEdit(article)}
+                                className="font-medium text-yellow-600 hover:text-yellow-700 hover:underline"
+                            >
+                                Editar
+                            </button>
+                            {article.status !== 'approved' && (
+                                <button 
+                                    onClick={() => handleStatusChange(article.id!, 'approved')}
+                                    className="font-medium text-green-600 hover:text-green-800 hover:underline"
+                                >
+                                    Aprovar
+                                </button>
+                            )}
+                             {article.status !== 'rejected' && (
+                                <button 
+                                    onClick={() => handleStatusChange(article.id!, 'rejected')}
+                                    className="font-medium text-red-600 hover:text-red-800 hover:underline"
+                                >
+                                    Rejeitar
+                                </button>
+                            )}
+                        </td>
+                    </tr>
+                    ))
+                )}
+            </tbody>
+            </table>
+        </div>
+        <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
+        </>
       )}
-    </>
+
+      {viewingArticle && (
+          <NewsViewModal article={viewingArticle} onClose={() => setViewingArticle(null)} />
+      )}
+    </div>
   );
-};
+}
